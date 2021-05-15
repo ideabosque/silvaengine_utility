@@ -7,6 +7,7 @@ __author__ = "bibow"
 import json, dateutil, re
 from decimal import Decimal
 from datetime import datetime, date
+from graphql.error import GraphQLError, format_error as format_graphql_error
 
 datetime_format = "%Y-%m-%dT%H:%M:%S"
 datetime_format_regex = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
@@ -60,8 +61,22 @@ class Struct(object):
 
 class Utility(object):
     @staticmethod
+    def format_error(error):
+        if isinstance(error, GraphQLError):
+            return format_graphql_error(error)
+
+        return {"message": str(error)}
+
+    @staticmethod
     def json_dumps(data):
-        return json.dumps(data, indent=4, cls=JSONEncoder, ensure_ascii=False)
+        return json.dumps(
+            data,
+            indent=2,
+            sort_keys=True,
+            separators=(",", ": "),
+            cls=JSONEncoder,
+            ensure_ascii=False,
+        )
 
     @staticmethod
     def json_loads(data, parser_number=True):
