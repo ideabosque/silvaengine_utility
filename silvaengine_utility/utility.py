@@ -26,6 +26,8 @@ class JSONEncoder(json.JSONEncoder):
             return o.strftime(datetime_format)
         elif isinstance(o, (bytes, bytearray)):
             return str(o)
+        elif hasattr(o, "__dict__"):
+            return o.__dict__
         else:
             return super(JSONEncoder, self).default(o)
 
@@ -85,3 +87,28 @@ class Utility(object):
                 data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
             )
         return json.loads(data, cls=JSONDecoder)
+
+
+class HttpResponse(object):
+    @staticmethod
+    def response_json(status_code, data):
+        body = {}
+
+        if status_code and str(status_code)[0] == "2":
+            body["data"] = data
+        else:
+            body["errors"] = data
+
+        return {
+            "statusCode": int(status_code),
+            "headers": {
+                "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": (
+                Utility.json_dumps(
+                    body,
+                    indent=4,
+                )
+            ),
+        }
