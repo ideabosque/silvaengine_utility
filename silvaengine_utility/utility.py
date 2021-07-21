@@ -4,7 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
-import json, dateutil, re
+import json, dateutil, re, struct, socket
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
@@ -87,3 +87,23 @@ class Utility(object):
                 data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
             )
         return json.loads(data, cls=JSONDecoder)
+
+    @staticmethod
+    def in_subnet(ip, subnet) -> bool:
+        if type(subnet) is str and str:
+            match = re.match("(.*)/(.*)", subnet)
+
+            if match:
+                subnet = match.group(1)
+                shift = int(match.group(2))
+                nip = struct.unpack("I", socket.inet_aton(str(ip)))[0]
+                nsubnet = struct.unpack("I", socket.inet_aton(subnet))[0]
+                mask = (1 << shift) - 1
+
+                return (nip & mask) == (nsubnet & mask)
+
+            return str(ip).strip() == subnet.strip()
+        elif type(subnet) is list and len(subnet):
+            return str(ip) in [str(value).strip() for value in subnet]
+
+        return str(ip).strip() == str(subnet).strip()
