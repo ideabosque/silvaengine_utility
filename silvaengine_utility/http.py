@@ -12,13 +12,17 @@ class HttpResponse(object):
     @staticmethod
     def response_json(status_code, data):
         body = {}
+        status_code = int(status_code) if status_code else 500
 
         if status_code and str(status_code)[0] == "2":
             body["data"] = data
+
+            if data is None:
+                status_code = 406
         elif isinstance(data, GraphQLError):
             body["errors"] = format_graphql_error(data)
         else:
-            body["message"] = str(data)
+            body["message"] = str(data) if data else "Unkown"
 
         return {
             "statusCode": int(status_code),
@@ -26,10 +30,5 @@ class HttpResponse(object):
                 "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
                 "Access-Control-Allow-Origin": "*",
             },
-            "body": (
-                Utility.json_dumps(
-                    body,
-                    indent=4,
-                )
-            ),
+            "body": (Utility.json_dumps(body)),
         }
