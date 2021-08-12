@@ -5,6 +5,8 @@ from __future__ import print_function
 __author__ = "bibow"
 
 import json, dateutil, re, struct, socket
+from importlib.util import find_spec
+from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
@@ -107,3 +109,31 @@ class Utility(object):
             return str(ip) in [str(value).strip() for value in subnet]
 
         return str(ip).strip() == str(subnet).strip()
+
+    @staticmethod
+    def import_dynamically(
+        module_name, function_name, class_name=None, constructor_parameters=None
+    ):
+        if not module_name or not function_name:
+            return None
+
+        # 1. Load module by dynamic
+        spec = find_spec(module_name)
+
+        if spec is None:
+            return None
+
+        agent = import_module(module_name)
+
+        if hasattr(agent, class_name):
+            if type(constructor_parameters) is dict and len(
+                constructor_parameters.keys()
+            ):
+                agent = getattr(agent, class_name)(**constructor_parameters)
+            else:
+                agent = getattr(agent, class_name)()
+
+        if not hasattr(agent, function_name):
+            return None
+
+        return getattr(agent, function_name)
