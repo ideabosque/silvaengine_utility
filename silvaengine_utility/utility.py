@@ -4,7 +4,7 @@ from __future__ import print_function
 
 __author__ = "bibow"
 
-import json, dateutil, re, struct, socket
+import json, dateutil, re, struct, socket, asyncio
 from importlib.util import find_spec
 from importlib import import_module
 from decimal import Decimal
@@ -90,6 +90,7 @@ class Utility(object):
             )
         return json.loads(data, cls=JSONDecoder)
 
+    # Check the specified ip exists in the given ip segment
     @staticmethod
     def in_subnet(ip, subnet) -> bool:
         if type(subnet) is str and str:
@@ -110,15 +111,18 @@ class Utility(object):
 
         return str(ip).strip() == str(subnet).strip()
 
+    # Import the module dynamically
     @staticmethod
     def import_dynamically(
         module_name, function_name, class_name=None, constructor_parameters=None
     ):
+        print("import_dynamically start:", module_name, function_name)
         if not module_name or not function_name:
             return None
 
         # 1. Load module by dynamic
         spec = find_spec(module_name)
+        print("import_dynamically spec")
 
         if spec is None:
             return None
@@ -133,7 +137,34 @@ class Utility(object):
             else:
                 agent = getattr(agent, class_name)()
 
+        print("import_dynamically class:", class_name)
+
         if not hasattr(agent, function_name):
             return None
 
+        print("import_dynamically end")
+
         return getattr(agent, function_name)
+
+    # Call function by async
+    @staticmethod
+    def callByAsync(callable):
+        try:
+
+            async def exec_async_functions(callable):
+                if type(callable) is list and len(callable):
+                    print("Execute functions by async")
+                    tasks = []
+
+                    for fn in callable:
+                        if hasattr(fn, "__call__"):
+                            tasks.append(fn)
+
+                    await asyncio.gather(*tasks)
+                elif hasattr(callable, "__call__"):
+                    print("Execute function by async")
+                    await asyncio.gather(callable())
+
+            return asyncio.run(exec_async_functions(callable))
+        except Exception as e:
+            raise e

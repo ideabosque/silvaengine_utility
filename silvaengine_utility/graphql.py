@@ -41,9 +41,7 @@ class Graphql(object):
                     and type(s.selection_set.selections) is list
                     and len(s.selection_set.selections) > 0
                 ):
-                    return fs + extract_by_recursion(
-                        s.selection_set.selections, deepth=dpt
-                    )
+                    fs += extract_by_recursion(s.selection_set.selections, deepth=dpt)
 
             return fs
 
@@ -58,6 +56,8 @@ class Graphql(object):
             if operation and on != operation.lower():
                 continue
 
+            result[on] = [od.name.value]
+
             if on in result:
                 result[on] += extract_by_recursion(
                     od.selection_set.selections, deepth=deepth
@@ -71,6 +71,80 @@ class Graphql(object):
             result[operation] = list({}.fromkeys(result[operation]).keys())
 
         return result
+
+    @staticmethod
+    def extract_flatten_ast(source):
+        def extract_by_recursion(selections, path=""):
+            fields = []
+
+            if not path or path[-1] != "/":
+                path += "/"
+
+            for field in selections:
+                if (
+                    field.name is None
+                    or field.name.value is None
+                    or field.name.value == ""
+                ):
+                    continue
+
+                value = field.name.value.strip().lower()
+
+                fields.append({"field": value, "path": path.strip().lower()})
+
+                if (
+                    hasattr(field, "selection_set")
+                    and type(field.selection_set) is SelectionSet
+                    and type(field.selection_set.selections) is list
+                    and len(field.selection_set.selections) > 0
+                ):
+                    fields += extract_by_recursion(
+                        field.selection_set.selections, path + value
+                    )
+
+            return fields
+
+        def flatten(selections):
+            output = {}
+
+            for item in extract_by_recursion(selections):
+                if output.get(item.get("path")) is None:
+                    output[item.get("path")] = []
+
+                if item.get("field") is not None and item.get("field") != "":
+                    output[item.get("path")].append(item.get("field"))
+
+            return output
+
+        results = []
+        ast = parse(source)
+
+        if ast and type(ast.definitions) is list and len(ast.definitions):
+            for operation_definition in ast.definitions:
+                result = {}
+
+                if operation_definition.operation:
+                    result["operation"] = operation_definition.operation.strip().lower()
+
+                if operation_definition.name and operation_definition.name.value:
+                    result[
+                        "operation_name"
+                    ] = operation_definition.name.value.strip().lower()
+
+                if (
+                    hasattr(operation_definition, "selection_set")
+                    and type(operation_definition.selection_set) is SelectionSet
+                    and hasattr(operation_definition.selection_set, "selections")
+                    and type(operation_definition.selection_set.selections) is list
+                    and len(operation_definition.selection_set.selections) > 0
+                ):
+                    result["fields"] = flatten(
+                        operation_definition.selection_set.selections
+                    )
+
+                results.append(result)
+
+        return results
 
 
 class JSON(graphene.Scalar):
