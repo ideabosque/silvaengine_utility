@@ -134,6 +134,8 @@ class Utility(object):
                 constructor_parameters.keys()
             ):
                 agent = getattr(agent, class_name)(**constructor_parameters)
+            elif callable(getattr(getattr(agent, class_name), function_name)):
+                agent = getattr(agent, class_name)
             else:
                 agent = getattr(agent, class_name)()
 
