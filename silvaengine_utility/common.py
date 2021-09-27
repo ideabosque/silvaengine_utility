@@ -38,6 +38,7 @@ class Common(object):
 
         return result
 
+    @staticmethod
     def invoke_data_process(settings, data_payload):
         if "env" not in settings or (settings["env"] != "local"):
             lambda_client = boto3.client("lambda", region_name="us-east-1")
