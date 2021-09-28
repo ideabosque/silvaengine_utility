@@ -4,7 +4,6 @@ from __future__ import print_function
 
 __author__ = "bl"
 
-from silvaengine_auth import Auth
 from collections import defaultdict
 from .utility import Utility
 import boto3, json
