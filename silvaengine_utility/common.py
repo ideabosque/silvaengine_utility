@@ -24,11 +24,7 @@ class Common(object):
         )
 
         result = defaultdict(dict)
-        role_types = {
-            1: "product_managers",
-            2: "qc_managers",
-            3: "dept_managers"
-        }
+        role_types = {1: "product_managers", 2: "qc_managers", 3: "dept_managers"}
 
         for seller_role in role_sellers:
             if seller_role and seller_role.get("type") and seller_role.get("groups"):
@@ -36,7 +32,9 @@ class Common(object):
 
                 for seller_id, users in seller_role.get("groups").items():
                     result[index][seller_id] = [
-                        user.get("user_base_info", {}).get("email") for user in users if user.get("user_base_info", {}).get("email")
+                        user.get("user_base_info", {}).get("email")
+                        for user in users
+                        if user.get("user_base_info", {}).get("email")
                     ]
 
             # if seller_role["role_id"] == "b874bcee-0af8-11ec-acc5-5d5264ad5593":
