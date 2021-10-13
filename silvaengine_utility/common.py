@@ -24,34 +24,24 @@ class Common(object):
         )
 
         result = defaultdict(dict)
-        role_types = {1: "product_managers", 2: "qc_managers", 3: "dept_managers"}
 
-        for seller_role in role_sellers:
-            if seller_role and seller_role.get("type") and seller_role.get("groups"):
-                index = role_types.get(seller_role.get("type"))
+        if role_sellers:
+            role_types = {1: "product_managers", 2: "qc_managers", 3: "dept_managers"}
 
-                for seller_id, users in seller_role.get("groups").items():
-                    result[index][seller_id] = [
-                        user.get("user_base_info", {}).get("email")
-                        for user in users
-                        if user.get("user_base_info", {}).get("email")
-                    ]
+            for seller_role in role_sellers:
+                if (
+                    seller_role
+                    and seller_role.get("type")
+                    and seller_role.get("groups")
+                ):
+                    index = role_types.get(seller_role.get("type"))
 
-            # if seller_role["role_id"] == "b874bcee-0af8-11ec-acc5-5d5264ad5593":
-            #     for seller_id, users in seller_role["groups"].items():
-            #         result["product_managers"][seller_id] = [
-            #             user["user_base_info"]["email"] for user in users
-            #         ]
-            # if seller_role["role_id"] == "cc1d018b-0af8-11ec-bb01-5d5264ad5593":
-            #     for seller_id, users in seller_role["groups"].items():
-            #         result["qc_managers"][seller_id] = [
-            #             user["user_base_info"]["email"] for user in users
-            #         ]
-            # if seller_role["role_id"] == "dc1b01eb-4af8-17ec-ba01-2d5234adf591":
-            #     for seller_id, users in seller_role["groups"].items():
-            #         result["dept_managers"][seller_id] = [
-            #             user["user_base_info"]["email"] for user in users
-            #         ]
+                    for seller_id, users in seller_role.get("groups").items():
+                        result[index][seller_id] = [
+                            user.get("user_base_info", {}).get("email")
+                            for user in users
+                            if user.get("user_base_info", {}).get("email")
+                        ]
 
         return result
 
