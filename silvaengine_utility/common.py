@@ -1,12 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-
-__author__ = "bl"
-
 from collections import defaultdict
 from .utility import Utility
 import boto3, json
+
+__author__ = "bl"
 
 
 class Common(object):
@@ -75,5 +74,24 @@ class Common(object):
                     }
                 ),
             )
+        except Exception as e:
+            raise e
+
+    @staticmethod
+    def get_query(model, context):
+        try:
+            query = getattr(model, "query", None)
+
+            if not query:
+                session = context.get("session")
+
+                if not session:
+                    raise Exception(
+                        "A query in the model Base or a session in the schema is required for querying.\n"
+                        "Read more http://docs.graphene-python.org/projects/sqlalchemy/en/latest/tips/#querying"
+                    )
+
+                query = session.query(model)
+            return query
         except Exception as e:
             raise e
