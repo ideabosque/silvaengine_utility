@@ -83,7 +83,7 @@ class Common(object):
             query = getattr(model, "query", None)
 
             if not query:
-                session = context.get("session")
+                session = context.get("database_session")
 
                 if not session:
                     raise Exception(
