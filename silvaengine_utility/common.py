@@ -13,9 +13,9 @@ class Common(object):
     def get_grouped_seller_role_emails(logger, role_types, relation_type, ids):
         try:
             role_sellers = Utility.import_dynamically(
-                "silvaengine_auth",
+                "silvaengine_permission",
                 "get_users_by_role_type",
-                "Auth",
+                "Permission",
                 constructor_parameters={"logger": logger},
             )(
                 role_types,  # 待查询的角色类别, 数组, 必填, 可取值为: 0 - 普通角色, 1 - GWI Account Manager, 2 - GWI QC Manager, 3 - Dept Managers
