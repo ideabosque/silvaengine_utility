@@ -1,15 +1,16 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-
-__author__ = "bibow"
-
-import json, dateutil, re, struct, socket, asyncio
+from types import FunctionType
 from importlib.util import find_spec
 from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
+import json, dateutil, re, struct, socket, asyncio
+
+__author__ = "bibow"
+
 
 datetime_format = "%Y-%m-%dT%H:%M:%S"
 datetime_format_regex = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
@@ -111,6 +112,10 @@ class Utility(object):
 
         return str(ip).strip() == str(subnet).strip()
 
+    @staticmethod
+    def is_static_method(callable_method):
+        return callable(callable_method) and type(callable_method) is FunctionType
+
     # Import the module dynamically
     @staticmethod
     def import_dynamically(
@@ -132,10 +137,15 @@ class Utility(object):
                 constructor_parameters.keys()
             ):
                 agent = getattr(agent, class_name)(**constructor_parameters)
-            elif callable(getattr(getattr(agent, class_name), function_name)):
+            elif Utility.is_static_method(
+                getattr(getattr(agent, class_name), function_name)
+            ):
                 agent = getattr(agent, class_name)
             else:
-                agent = getattr(agent, class_name)()
+                try:
+                    agent = getattr(agent, class_name)()
+                except:
+                    return None
 
         if not hasattr(agent, function_name):
             return None
