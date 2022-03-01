@@ -121,18 +121,21 @@ class Utility(object):
     def import_dynamically(
         module_name, function_name, class_name=None, constructor_parameters=None
     ):
+        print("id1111111111111")
         if not module_name or not function_name:
             return None
 
+        print("id222222222222")
         # 1. Load module by dynamic
         spec = find_spec(module_name)
 
         if spec is None:
             return None
-
+        print("id3333333333333")
         agent = import_module(module_name)
 
         if class_name and hasattr(agent, class_name):
+            print("id444444444444444")
             if type(constructor_parameters) is dict and len(
                 constructor_parameters.keys()
             ):
@@ -143,13 +146,17 @@ class Utility(object):
                 agent = getattr(agent, class_name)
             else:
                 try:
+                    print("id55555555555")
                     agent = getattr(agent, class_name)()
                 except:
+                    print("id66666666666666666")
                     return None
 
         if not hasattr(agent, function_name):
+            print("id7777777777777777777777777")
             return None
 
+        print("id888888888888")
         return getattr(agent, function_name)
 
     # Call function by async
