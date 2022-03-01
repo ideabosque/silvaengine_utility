@@ -20,7 +20,7 @@ class Common(object):
             )(
                 channel=channel,
                 role_types=role_types,  # 待查询的角色类别, 数组, 必填, 可取值为: 0 - 普通角色, 1 - GWI Account Manager, 2 - GWI QC Manager, 3 - Dept Managers
-                relation_type=relation_type,  # 关系类型, 整型, 必填, 可取值为:0 - admin, 1 - seller, 2 - team
+                relationship_type=relation_type,  # 关系类型, 整型, 必填, 可取值为:0 - admin, 1 - seller, 2 - team
                 ids=ids,  # 商家或公司ID, 数组, 选填, 默认为None
             )
 
