@@ -155,7 +155,7 @@ class Utility(object):
 
     # Call function by async
     @staticmethod
-    def callByAsync(callable):
+    def call_by_async(callable):
         try:
 
             async def exec_async_functions(callable):
@@ -177,8 +177,12 @@ class Utility(object):
             raise e
 
     @staticmethod
-    def create_database_session(**settings):
+    def create_database_session(settings):
         try:
+            assert type(settings) is dict and len(
+                settings
+            ), "Missing configuration items required to connect to mysql database."
+
             required_settings = ["user", "password", "host", "port", "schema"]
 
             for key in required_settings:
