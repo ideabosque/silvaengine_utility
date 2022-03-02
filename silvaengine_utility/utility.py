@@ -7,8 +7,10 @@ from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
-from sqlalchemy import create_engine, orm
+from sqlalchemy import create_engine, orm, ext
 import json, dateutil, re, struct, socket, asyncio
+
+# from sqlalchemy.ext.declarative import DeclarativeMeta
 
 __author__ = "bibow"
 
@@ -19,7 +21,26 @@ datetime_format_regex = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):  # pylint: disable=E0202
-        if isinstance(o, Decimal):
+        if isinstance(o.__class__, ext.declarative.DeclarativeMeta):
+            # an SQLAlchemy class
+            fields = {}
+
+            for field in [
+                x for x in dir(o) if not x.startswith("_") and x != "metadata"
+            ]:
+                data = o.__getattribute__(field)
+
+                try:
+                    json.dumps(
+                        data
+                    )  # this will fail on non-encodable values, like other classes
+
+                    fields[field] = data
+                except TypeError:
+                    fields[field] = None
+            # a json-encodable dict
+            return fields
+        elif isinstance(o, Decimal):
             if o % 1 > 0:
                 return float(o)
             else:
