@@ -7,6 +7,7 @@ from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
+from sqlalchemy import create_engine, orm
 import json, dateutil, re, struct, socket, asyncio
 
 __author__ = "bibow"
@@ -172,5 +173,34 @@ class Utility(object):
                     await asyncio.gather(callable())
 
             return asyncio.run(exec_async_functions(callable))
+        except Exception as e:
+            raise e
+
+    @staticmethod
+    def create_database_session(**settings):
+        try:
+            required_settings = ["user", "password", "host", "port", "schema"]
+
+            for key in required_settings:
+                assert settings.get(
+                    key
+                ), f"Missing required configuration item `{key}`."
+
+            dsn = "{}+{}://{}:{}@{}:{}/{}?charset={}".format(
+                settings.get("type", "mysql"),
+                settings.get("driver", "pymysql"),
+                settings.get("user"),
+                settings.get("password", ""),
+                settings.get("host"),
+                settings.get("port", 3306),
+                settings.get("schema"),
+                settings.get("charset", "utf8mb4"),
+            )
+
+            return orm.scoped_session(
+                orm.sessionmaker(
+                    autocommit=False, autoflush=False, bind=create_engine(dsn)
+                )
+            )
         except Exception as e:
             raise e
