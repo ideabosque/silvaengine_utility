@@ -7,7 +7,8 @@ from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
-from sqlalchemy import create_engine, orm, ext
+from sqlalchemy import create_engine, orm
+from sqlalchemy.ext.declarative import DeclarativeMeta
 import json, dateutil, re, struct, socket, asyncio
 
 # from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -21,7 +22,7 @@ datetime_format_regex = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):  # pylint: disable=E0202
-        if isinstance(o.__class__, ext.declarative.DeclarativeMeta):
+        if isinstance(o.__class__, DeclarativeMeta):
             # an SQLAlchemy class
             fields = {}
 
