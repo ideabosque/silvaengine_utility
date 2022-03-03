@@ -230,3 +230,23 @@ class Utility(object):
             )
         except Exception as e:
             raise e
+
+    @staticmethod
+    def get_lower_case_name(text, separator="_"):
+        if not separator:
+            separator = "_"
+
+        return "".join(
+            [
+                char if not char.isupper() or index == 0 else f"{separator}{char}"
+                for index, char in enumerate(text)
+            ]
+        ).lower()
+
+    @staticmethod
+    def is_json_string(string):
+        try:
+            json.loads(string)
+            return True
+        except:
+            return False
