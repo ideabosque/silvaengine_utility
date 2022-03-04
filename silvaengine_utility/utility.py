@@ -231,8 +231,9 @@ class Utility(object):
         except Exception as e:
             raise e
 
+    # Convert camel case to underscore
     @staticmethod
-    def get_lower_case_name(text, separator="_"):
+    def convert_camel_to_underscore(text, separator="_"):
         if not separator:
             separator = "_"
 
