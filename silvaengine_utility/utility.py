@@ -16,8 +16,12 @@ import json, dateutil, re, struct, socket, asyncio
 __author__ = "bibow"
 
 
-datetime_format = "%Y-%m-%dT%H:%M:%S"
-datetime_format_regex = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+datetime_format = "%Y-%m-%dT%H:%M:%S%z"
+datetime_format_regex_patterns = [
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$",
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+|-]\d{4}$",
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+|-]\d{2}:\d{2}$",
+]
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -102,8 +106,11 @@ class JSONDecoder(json.JSONDecoder):
             try:
                 if not isinstance(value, str):
                     continue
-                if datetime_format_regex.match(value):
-                    o[key] = dateutil.parser.parse(value)
+                for datetime_format_regex_pattern in datetime_format_regex_patterns:
+                    datetime_format_regex = re.compile(datetime_format_regex_pattern)
+                    if datetime_format_regex.match(value):
+                        o[key] = dateutil.parser.parse(value)
+                        break
             except (ValueError, AttributeError):
                 pass
 
