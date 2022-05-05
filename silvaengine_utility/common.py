@@ -56,23 +56,26 @@ class Common(object):
             raise e
 
     @staticmethod
-    def invoke_data_process(settings, data_payload):
+    def invoke_data_process(settings, data_payload, channel):
         try:
             if "env" not in settings or (settings["env"] != "local"):
-                lambda_client = boto3.client("lambda", region_name="us-east-1")
+                lambda_client = boto3.client(
+                    "lambda",
+                    region_name=settings.get("aws_region_name", "us-east-1"),
+                )
             else:
                 lambda_client = boto3.client(
                     "lambda",
-                    aws_access_key_id=settings["aws_access_key_id"],
-                    aws_secret_access_key=settings["aws_secret_access_key"],
-                    region_name="us-east-1",
+                    aws_access_key_id=settings.get("aws_access_key_id"),
+                    aws_secret_access_key=settings.get("aws_secret_access_key"),
+                    region_name=settings.get("aws_region_name", "us-east-1"),
                 )
             lambda_client.invoke(
                 FunctionName="silvaengine_agenttask",
                 InvocationType="Event",
                 Payload=json.dumps(
                     {
-                        "endpoint_id": "api",
+                        "endpoint_id": str(channel).strip(),
                         "funct": "data_process_engine_run",
                         "params": data_payload,
                     }
