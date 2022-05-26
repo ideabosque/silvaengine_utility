@@ -11,8 +11,16 @@ __author__ = "bl"
 class Common(object):
     @staticmethod
     def get_grouped_seller_role_emails(
-        channel, settings, logger, role_types, relation_type, ids
+        channel,
+        settings,
+        logger,
+        role_types,
+        relation_type,
+        ids,
+        database_session=None,
     ):
+        if database_session:
+            settings["database_session"] = database_session
         try:
             role_sellers = Utility.import_dynamically(
                 "silvaengine_permission",
