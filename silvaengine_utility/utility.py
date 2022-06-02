@@ -283,7 +283,17 @@ class Utility(object):
 
     @staticmethod
     def convert_object_to_dict(instance):
-        return {
-            c.key: getattr(instance, c.key)
-            for c in inspect(instance).mapper.column_attrs
-        }
+        # return {
+        #     c.key: getattr(instance, c.key)
+        #     for c in inspect(instance).mapper.column_attrs
+        # }
+        attributes = {}
+
+        for attribute in dir(instance):
+            attribute = str(attribute).strip()
+            value = getattr(instance, attribute)
+
+            if not str(attribute).strip().startswith("__") and not callable(value):
+                attributes[attribute] = value
+
+        return attributes
