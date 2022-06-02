@@ -7,7 +7,7 @@ from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
-from sqlalchemy import create_engine, orm
+from sqlalchemy import create_engine, orm, inspect
 from sqlalchemy.ext.declarative import DeclarativeMeta
 import json, dateutil, re, struct, socket, asyncio
 
@@ -58,25 +58,6 @@ class JSONEncoder(json.JSONEncoder):
                 return out
 
             return convert_object_to_dict(o)
-
-            # # an SQLAlchemy class
-            # fields = {}
-
-            # for field in [
-            #     x for x in dir(o) if not x.startswith("_") and x != "metadata"
-            # ]:
-            #     data = o.__getattribute__(field)
-
-            #     try:
-            #         json.dumps(
-            #             data
-            #         )  # this will fail on non-encodable values, like other classes
-
-            #         fields[field] = data
-            #     except TypeError:
-            #         fields[field] = None
-            # # a json-encodable dict
-            # return fields
         elif isinstance(o, Decimal):
             if o % 1 > 0:
                 return float(o)
@@ -144,6 +125,9 @@ class Utility(object):
             cls=JSONEncoder,
             ensure_ascii=False,
         )
+        # return orjson.dumps(
+        #     data, option=orjson.OPT_NAIVE_UTC | orjson.OPT_SERIALIZE_NUMPY
+        # )
 
     @staticmethod
     def json_loads(data, parser_number=True):
@@ -152,6 +136,7 @@ class Utility(object):
                 data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
             )
         return json.loads(data, cls=JSONDecoder)
+        # return orjson.loads(data)
 
     # Check the specified ip exists in the given ip segment
     @staticmethod
@@ -295,3 +280,10 @@ class Utility(object):
             return True
         except:
             return False
+
+    @staticmethod
+    def convert_object_to_dict(instance):
+        return {
+            c.key: getattr(instance, c.key)
+            for c in inspect(instance).mapper.column_attrs
+        }

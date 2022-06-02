@@ -21,6 +21,7 @@ class Common(object):
     ):
         if database_session:
             settings["database_session"] = database_session
+
         try:
             role_sellers = Utility.import_dynamically(
                 "silvaengine_permission",
