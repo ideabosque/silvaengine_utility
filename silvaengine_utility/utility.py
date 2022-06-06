@@ -9,7 +9,7 @@ from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
 from sqlalchemy import create_engine, orm, inspect
 from sqlalchemy.ext.declarative import DeclarativeMeta
-import json, dateutil, re, struct, socket, asyncio
+import json, dateutil, re, struct, socket, asyncio, jsonpickle
 
 # from sqlalchemy.ext.declarative import DeclarativeMeta
 
@@ -117,26 +117,24 @@ class Utility(object):
 
     @staticmethod
     def json_dumps(data):
-        return json.dumps(
-            data,
-            indent=2,
-            sort_keys=True,
-            separators=(",", ": "),
-            cls=JSONEncoder,
-            ensure_ascii=False,
-        )
-        # return orjson.dumps(
-        #     data, option=orjson.OPT_NAIVE_UTC | orjson.OPT_SERIALIZE_NUMPY
+        # return json.dumps(
+        #     data,
+        #     indent=2,
+        #     sort_keys=True,
+        #     separators=(",", ": "),
+        #     cls=JSONEncoder,
+        #     ensure_ascii=False,
         # )
+        return jsonpickle.encode(data, unpicklable=False)
 
     @staticmethod
     def json_loads(data, parser_number=True):
-        if parser_number:
-            return json.loads(
-                data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
-            )
-        return json.loads(data, cls=JSONDecoder)
-        # return orjson.loads(data)
+        # if parser_number:
+        #     return json.loads(
+        #         data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
+        #     )
+        # return json.loads(data, cls=JSONDecoder)
+        return jsonpickle.decode(data)
 
     # Check the specified ip exists in the given ip segment
     @staticmethod
