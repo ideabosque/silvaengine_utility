@@ -117,24 +117,24 @@ class Utility(object):
 
     @staticmethod
     def json_dumps(data):
-        # return json.dumps(
-        #     data,
-        #     indent=2,
-        #     sort_keys=True,
-        #     separators=(",", ": "),
-        #     cls=JSONEncoder,
-        #     ensure_ascii=False,
-        # )
-        return jsonpickle.encode(data, unpicklable=False)
+        return json.dumps(
+            data,
+            indent=2,
+            sort_keys=True,
+            separators=(",", ": "),
+            cls=JSONEncoder,
+            ensure_ascii=False,
+        )
+        # return jsonpickle.encode(data, unpicklable=False)
 
     @staticmethod
     def json_loads(data, parser_number=True):
-        # if parser_number:
-        #     return json.loads(
-        #         data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
-        #     )
-        # return json.loads(data, cls=JSONDecoder)
-        return jsonpickle.decode(data)
+        if parser_number:
+            return json.loads(
+                data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
+            )
+        return json.loads(data, cls=JSONDecoder)
+        # return jsonpickle.decode(data)
 
     # Check the specified ip exists in the given ip segment
     @staticmethod
