@@ -79,6 +79,7 @@ class Common(object):
                     aws_secret_access_key=settings.get("aws_secret_access_key"),
                     region_name=settings.get("aws_region_name", "us-east-1"),
                 )
+
             lambda_client.invoke(
                 FunctionName="silvaengine_agenttask",
                 InvocationType="Event",
