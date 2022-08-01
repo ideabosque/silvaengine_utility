@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from types import FunctionType
+from importlib.util import find_spec
+from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
@@ -10,8 +12,6 @@ from sqlalchemy.ext.declarative import DeclarativeMeta
 import json, dateutil, re, struct, socket, asyncio
 
 # import jsonpickle
-# from importlib import import_module
-# from importlib.util import find_spec
 # from sqlalchemy.ext.declarative import DeclarativeMeta
 
 __author__ = "bibow"
@@ -174,13 +174,13 @@ class Utility(object):
         function_name = str(function_name).strip()
 
         # 1. Load module by dynamic
-        # spec = find_spec(name=module_name, package=module_name)
+        spec = find_spec(name=module_name)
 
-        # if spec is None:
-        #     return None
+        if spec is None:
+            return None
 
-        # agent = import_module(name=module_name, package=module_name)
-        agent = __import__("{}.{}".format(module_name, module_name))
+        agent = import_module(name=module_name)
+        # agent = __import__("{}.{}".format(module_name, module_name))
 
         if not agent:
             return None
