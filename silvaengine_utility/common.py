@@ -86,13 +86,11 @@ class Common(object):
             lambda_client.invoke(
                 FunctionName="silvaengine_agenttask",
                 InvocationType=invocation_type,
-                Payload=json.dumps(
-                    {
-                        "endpoint_id": str(channel).strip(),
-                        "funct": "data_process_engine_run",
-                        "params": data_payload,
-                    }
-                ),
+                Payload={
+                    "endpoint_id": str(channel).strip(),
+                    "funct": "data_process_engine_run",
+                    "params": data_payload,
+                },
             )
         except Exception as e:
             raise e
