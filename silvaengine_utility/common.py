@@ -65,7 +65,7 @@ class Common(object):
             raise e
 
     @staticmethod
-    def invoke_data_process(settings, data_payload, channel):
+    def invoke_data_process(settings, data_payload, channel, invocation_type="Event"):
         try:
             if "app_env" not in settings or (settings["app_env"] != "local"):
                 lambda_client = boto3.client(
@@ -80,9 +80,12 @@ class Common(object):
                     region_name=settings.get("aws_region_name", "us-east-1"),
                 )
 
+            if invocation_type not in ["RequestResponse", "Event"]:
+                invocation_type = "Event"
+
             lambda_client.invoke(
                 FunctionName="silvaengine_agenttask",
-                InvocationType="Event",
+                InvocationType=invocation_type,
                 Payload=json.dumps(
                     {
                         "endpoint_id": str(channel).strip(),
