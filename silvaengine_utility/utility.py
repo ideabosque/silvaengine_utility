@@ -173,11 +173,11 @@ class Utility(object):
         module_name = str(module_name).strip()
         function_name = str(function_name).strip()
 
-        # 1. Load module by dynamic
-        spec = find_spec(module_name)
+        # # 1. Load module by dynamic
+        # spec = find_spec(module_name)
 
-        if spec is None:
-            return None
+        # if spec is None:
+        #     return None
 
         agent = import_module(module_name)
 
