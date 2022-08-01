@@ -174,12 +174,12 @@ class Utility(object):
         function_name = str(function_name).strip()
 
         # 1. Load module by dynamic
-        spec = find_spec(module_name)
+        spec = find_spec(name=module_name, package=module_name)
 
         if spec is None:
             return None
 
-        agent = import_module(module_name)
+        agent = import_module(name=module_name, package=module_name)
         # agent = __import__(module_name)
 
         if not agent:
