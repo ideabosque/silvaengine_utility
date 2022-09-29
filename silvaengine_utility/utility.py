@@ -257,7 +257,14 @@ class Utility(object):
 
             return orm.scoped_session(
                 orm.sessionmaker(
-                    autocommit=False, autoflush=False, bind=create_engine(dsn)
+                    autocommit=False, 
+                    autoflush=False, 
+                    bind=create_engine(
+                        dsn,
+                        pool_size=settings.get("pool_size", 10),
+                        max_overflow=settings.get("max_overflow", -1),
+                        pool_recycle=settings.get("pool_size", 1200),
+                    ),
                 )
             )
         except Exception as e:
