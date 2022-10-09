@@ -60,6 +60,7 @@ class JSONEncoder(json.JSONEncoder):
 
             return convert_object_to_dict(o)
         elif isinstance(o, Decimal):
+            print(o, type(o))
             if o % 1 > 0:
                 return float(o)
             else:
@@ -257,8 +258,8 @@ class Utility(object):
 
             return orm.scoped_session(
                 orm.sessionmaker(
-                    autocommit=False, 
-                    autoflush=False, 
+                    autocommit=False,
+                    autoflush=False,
                     bind=create_engine(
                         dsn,
                         pool_size=settings.get("pool_size", 10),
