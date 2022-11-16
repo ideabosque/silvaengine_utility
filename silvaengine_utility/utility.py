@@ -7,7 +7,7 @@ from importlib import import_module
 from decimal import Decimal
 from datetime import datetime, date
 from graphql.error import GraphQLError, format_error as format_graphql_error
-from sqlalchemy import create_engine, orm, inspect
+from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
 import json, dateutil, re, struct, socket, asyncio
 
@@ -60,11 +60,13 @@ class JSONEncoder(json.JSONEncoder):
 
             return convert_object_to_dict(o)
         elif isinstance(o, Decimal):
-            print(o, type(o))
-            if o % 1 > 0:
-                return float(o)
-            else:
+            # if o % 1 > 0:
+            if float(o) == int(o):
                 return int(o)
+                
+            return float(o)
+            # else:
+            #     return int(o)
         elif hasattr(o, "attribute_values"):
             return o.attribute_values
         elif isinstance(o, (datetime, date)):

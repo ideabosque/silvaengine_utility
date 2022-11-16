@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from collections import defaultdict
-from .utility import Utility
+from silvaengine_utility.utility import Utility
 import boto3, json
 
 __author__ = "bl"
@@ -31,9 +31,9 @@ class Common(object):
             )(
                 channel=channel,
                 settings=settings,
-                role_types=role_types,  # 待查询的角色类别, 数组, 必填, 可取值为: 0 - 普通角色, 1 - GWI Account Manager, 2 - GWI QC Manager, 3 - Dept Managers
-                relationship_type=relation_type,  # 关系类型, 整型, 必填, 可取值为:0 - admin, 1 - seller, 2 - team
-                ids=ids,  # 商家或公司ID, 数组, 选填, 默认为None
+                role_types=role_types,  # 0 - Normal, 1 - GWI Account Manager, 2 - GWI QC Manager, 3 - Dept Managers
+                relationship_type=relation_type,  # Integer, required:0 - admin, 1 - seller, 2 - team
+                ids=ids,  # seller or company id, list, optional: None(default)
             )
 
             result = defaultdict(dict)
@@ -46,6 +46,8 @@ class Common(object):
                 }
 
                 for seller_role in role_sellers:
+                    # print("*************************************************************")
+                    # print(seller_role)
                     if (
                         seller_role
                         and seller_role.get("type")
