@@ -82,9 +82,10 @@ class Graphql(object):
 
             for field in selections:
                 if (
-                    field.name is None
-                    or field.name.value is None
-                    or field.name.value == ""
+                    not hasattr(field, "name")
+                    or field.name is None
+                    or not hasattr(field.name, "value")
+                    or not field.name.value
                 ):
                     continue
 
@@ -119,14 +120,21 @@ class Graphql(object):
         results = []
         ast = parse(source)
 
-        if ast and type(ast.definitions) is list and len(ast.definitions):
+        if (
+            ast
+            and hasattr(ast, "definitions")
+            and type(ast.definitions) is list
+            and len(ast.definitions)
+        ):
             for operation_definition in ast.definitions:
                 result = {}
 
-                if operation_definition.operation:
+                if hasattr(operation_definition, "operation"):
                     result["operation"] = operation_definition.operation.strip().lower()
 
-                if operation_definition.name and operation_definition.name.value:
+                if hasattr(operation_definition, "name") and hasattr(
+                    operation_definition.name, "value"
+                ):
                     result[
                         "operation_name"
                     ] = operation_definition.name.value.strip().lower()
