@@ -60,13 +60,9 @@ class JSONEncoder(json.JSONEncoder):
 
             return convert_object_to_dict(o)
         elif isinstance(o, Decimal):
-            # if o % 1 > 0:
-            if float(o) == int(o):
+            if o.as_integer_ratio()[1] == 1:
                 return int(o)
-                
             return float(o)
-            # else:
-            #     return int(o)
         elif hasattr(o, "attribute_values"):
             return o.attribute_values
         elif isinstance(o, (datetime, date)):
