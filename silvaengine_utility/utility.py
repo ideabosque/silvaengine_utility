@@ -35,8 +35,8 @@ class JSONEncoder(json.JSONEncoder):
 
                 mapper = orm.class_mapper(obj.__class__)
                 columns = [column.key for column in mapper.columns]
-                get_key_value = (
-                    lambda c: (c, getattr(obj, c).isoformat())
+                get_key_value = lambda c: (
+                    (c, getattr(obj, c).isoformat())
                     if isinstance(getattr(obj, c), datetime)
                     else (c, getattr(obj, c))
                 )
@@ -83,7 +83,7 @@ class JSONDecoder(json.JSONDecoder):
         if o.get("_type") in ["bytes", "bytearray"]:
             return str(o["value"])
 
-        for (key, value) in o.items():
+        for key, value in o.items():
             try:
                 if not isinstance(value, str):
                     continue
@@ -306,3 +306,44 @@ class Utility(object):
                 attributes[attribute] = value
 
         return attributes
+
+    @staticmethod
+    def invoke_funct_on_local(
+        logger, funct, funct_on_local, funct_on_local_config, **params
+    ):
+        funct_on_local_class = getattr(
+            __import__(funct_on_local["module_name"]),
+            funct_on_local["class_name"],
+        )
+        funct_on_local = getattr(
+            funct_on_local_class(
+                logger,
+                **funct_on_local_config,
+            ),
+            funct,
+        )
+        return funct_on_local(**params)
+
+    @staticmethod
+    def invoke_funct_on_aws_lambda(logger, aws_lambda, **kwargs):
+        function_name = kwargs.get("function_name", "silvaengine_agenttask")
+        invocation_type = kwargs.get("invocation_type", "RequestResponse")
+        payload = {
+            "endpoint_id": kwargs["endpoint_id"],
+            "funct": kwargs["funct"],
+            "params": kwargs["params"],
+        }
+        response = aws_lambda.invoke(
+            FunctionName=function_name,
+            InvocationType=invocation_type,
+            Payload=Utility.json_dumps(payload),
+        )
+        if "FunctionError" in response.keys():
+            log = Utility.json_loads(response["Payload"].read())
+            logger.error(log)
+            raise Exception(log)
+
+        if invocation_type == "RequestResponse":
+            return response["Payload"].read().decode("utf-8")
+
+        return
