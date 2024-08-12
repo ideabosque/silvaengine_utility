@@ -1,15 +1,26 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from types import FunctionType
-from importlib.util import find_spec
-from importlib import import_module
+
+import asyncio
+import functools
+import inspect
+import json
+import re
+import socket
+import struct
+import time
+from datetime import date, datetime
 from decimal import Decimal
-from datetime import datetime, date
-from graphql.error import GraphQLError, format_error as format_graphql_error
+from importlib import import_module
+from importlib.util import find_spec
+from types import FunctionType
+
+import dateutil
+from graphql.error import GraphQLError
+from graphql.error import format_error as format_graphql_error
 from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
-import json, dateutil, re, struct, socket, asyncio
 
 # import jsonpickle
 # from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -347,3 +358,28 @@ class Utility(object):
             return response["Payload"].read().decode("utf-8")
 
         return
+
+
+def monitor_decorator(original_function):
+    @functools.wraps(original_function)
+    def wrapper_function(*args, **kwargs):
+        # Get the signature of the original function
+        signature = inspect.signature(original_function)
+        # Get the parameter names from the signature
+        parameter_names = list(signature.parameters.keys())
+
+        if "info" in parameter_names:
+            logger = args[0].context.get("logger")
+        elif "logger" in parameter_names:
+            logger = args[0]
+
+        logger.info(
+            f"Start function: {original_function.__name__} at {time.strftime('%X')}!!"
+        )
+        result = original_function(*args, **kwargs)
+        logger.info(
+            f"End function: {original_function.__name__} at {time.strftime('%X')}!!"
+        )
+        return result
+
+    return wrapper_function
