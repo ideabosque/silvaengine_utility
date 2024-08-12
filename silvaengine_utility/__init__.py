@@ -8,4 +8,4 @@ from .authorizer import Authorizer
 from .common import Common
 from .graphql import JSON, Graphql
 from .http import HttpResponse
-from .utility import Struct, Utility, monitor_decorator
+from .utility import Struct, Utility
