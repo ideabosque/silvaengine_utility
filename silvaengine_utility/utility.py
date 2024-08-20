@@ -216,24 +216,15 @@ class Utility(object):
 
     # Call function by async
     @staticmethod
-    def call_by_async(callable):
+    def call_by_async(callables):
         try:
+            async def exec_async_functions(callables):
+                if isinstance(callables, list) and callables:
+                    return await asyncio.gather(*[fn() if callable(fn) else asyncio.sleep(0) for fn in callables])
+                elif callable(callables):
+                    return await callables()
 
-            async def exec_async_functions(callable):
-                if type(callable) is list and len(callable):
-                    print("Execute functions by async")
-                    tasks = []
-
-                    for fn in callable:
-                        if hasattr(fn, "__call__"):
-                            tasks.append(fn)
-
-                    await asyncio.gather(*tasks)
-                elif hasattr(callable, "__call__"):
-                    print("Execute function by async")
-                    await asyncio.gather(callable())
-
-            return asyncio.run(exec_async_functions(callable))
+            return asyncio.run(exec_async_functions(callables))
         except Exception as e:
             raise e
 
