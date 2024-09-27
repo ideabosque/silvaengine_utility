@@ -7,6 +7,7 @@ import json
 import re
 import socket
 import struct
+import traceback
 from datetime import date, datetime
 from decimal import Decimal
 from importlib import import_module
@@ -355,3 +356,23 @@ class Utility(object):
             return response["Payload"].read().decode("utf-8")
 
         return
+
+    @staticmethod
+    def invoke_funct_on_aws_sqs(logger, task_queue, message_group_id, **kwargs):
+        try:
+            task_queue.send_message(
+                MessageAttributes={
+                    "endpoint_id": {
+                        "StringValue": kwargs["endpoint_id"],
+                        "DataType": "String",
+                    },
+                    "funct": {"StringValue": kwargs["funct"], "DataType": "String"},
+                },
+                MessageBody=Utility.json_dumps({"params": kwargs["params"]}),
+                MessageGroupId=message_group_id,
+            )
+            return
+        except Exception as e:
+            log = traceback.format_exc()
+            logger.error(log)
+            raise e
