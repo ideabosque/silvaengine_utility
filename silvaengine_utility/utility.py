@@ -580,7 +580,7 @@ class Utility(object):
             if field_type["kind"] == "NON_NULL":
                 return f"{format_type(field_type['ofType'])}!"
             elif field_type["kind"] == "LIST":
-                return f"[{format_type(field_type['ofType'])}]"
+                return f"[{format_type(field_type['ofType']) if field_type.get('ofType') else 'String'}]"
             return field_type["name"]
 
         def extract_operation_details(schema, operation_name, operation_type):
