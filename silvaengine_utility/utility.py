@@ -614,6 +614,8 @@ class Utility(object):
             else ""
         )
 
+        if not variable_definitions and not argument_usage and not field_string:
+            return f"""{operation_type.lower()} {operation_name} {{{operation_name}}}"""
         return f"""
         {operation_type.lower()} {operation_name}({variable_definitions}) {{
             {operation_name}({argument_usage}) {{
