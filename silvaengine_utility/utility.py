@@ -566,8 +566,7 @@ class Utility(object):
             (
                 f"{field['name']} {{ {Utility.generate_field_subselection(schema, field['type'])} }}"
                 if field["kind"] in ["OBJECT", "LIST"]
-                and field["type"]
-                not in ["String", "Int", "Decimal", "DateTime", "JSON"]
+                and field["type"] not in ["String", "Int", "Float", "DateTime", "JSON"]
                 else field["name"]
             )
             for field in fields
