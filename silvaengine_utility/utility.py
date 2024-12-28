@@ -561,16 +561,30 @@ class Utility(object):
 
     @staticmethod
     def generate_field_subselection(schema, type_name):
-        fields = Utility.extract_available_fields(schema, type_name)
-        return " ".join(
-            (
-                f"{field['name']} {{ {Utility.generate_field_subselection(schema, field['type'])} }}"
-                if field["kind"] in ["OBJECT", "LIST"]
-                and field["type"] not in ["String", "Int", "Float", "DateTime", "JSON"]
-                else field["name"]
-            )
-            for field in fields
-        )
+        try:
+            fields = Utility.extract_available_fields(schema, type_name)
+            subselection = []
+            for field in fields:
+                if field["kind"] in ["OBJECT", "LIST"]:
+                    if field["type"] and field["type"] not in [
+                        "String",
+                        "Int",
+                        "Float",
+                        "DateTime",
+                        "JSON",
+                    ]:
+                        # Recursively generate subselection for nested objects
+                        nested_fields = Utility.generate_field_subselection(
+                            schema, field["type"]
+                        )
+                        subselection.append(f"{field['name']} {{ {nested_fields} }}")
+                    else:
+                        subselection.append(field["name"])
+                else:
+                    subselection.append(field["name"])
+            return " ".join(subselection)
+        except Exception:
+            return ""
 
     @staticmethod
     def generate_graphql_operation(operation_name, operation_type, schema):
