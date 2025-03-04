@@ -450,6 +450,7 @@ class Utility(object):
         ## Test the waters 🧪 before diving in!
         ##<--Testing Function-->##
         if test_mode:
+            params.update({"endpoint_id": endpoint_id})
             if test_mode == "local_for_all":
                 # Jump to the local function if these conditions meet.
                 return Utility.invoke_funct_on_local(logger, setting, funct, **params)
