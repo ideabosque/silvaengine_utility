@@ -443,6 +443,7 @@ class Utility(object):
         setting=None,
         test_mode=None,
         aws_lambda=None,
+        invocation_type="RequestResponse",
         message_group_id=None,
         task_queue=None,
     ):
@@ -464,7 +465,7 @@ class Utility(object):
                 pass
         ##<--Testing Function-->##
 
-        # When we have both a message group and a task queue, hit the SQS 📨
+        # Process SQS message if message group and task queue are provided
         if message_group_id and task_queue:
             Utility._invoke_funct_on_aws_sqs(
                 logger,
@@ -476,26 +477,26 @@ class Utility(object):
                     "params": params,
                 },
             )
-            return  # No need to proceed after sending the SQS message.
+            return  # Exit after SQS message sent
 
-        # If we're at the top-level, let's call the AWS Lambda directly 💻
         result = Utility._invoke_funct_on_aws_lambda(
             logger,
             aws_lambda,
             **{
+                "invocation_type": invocation_type,
                 "endpoint_id": endpoint_id,
                 "funct": funct,
                 "params": params,
             },
         )
-        if result is None or result == "null":
+        if invocation_type == "Event" or not result or result == "null":
             return
 
         result = Utility.json_loads(Utility.json_loads(result))
-        if result.get("errors"):
+        if "errors" in result:
             raise Exception(result["errors"])
 
-        return result["data"]
+        return result.get("data", result)
 
     @staticmethod
     def execute_graphql_query(
