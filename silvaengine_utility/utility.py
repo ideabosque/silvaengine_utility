@@ -3,35 +3,33 @@
 from __future__ import print_function
 
 import asyncio
-import json
 import re
 import socket
 import struct
 import traceback
-from datetime import date, datetime
-from decimal import Decimal
+import warnings
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
 
-import dateutil
-from graphql.error import GraphQLError
-from graphql.error import format_error as format_graphql_error
-from sqlalchemy import create_engine, orm
-from sqlalchemy.ext.declarative import DeclarativeMeta
+try:
+    from graphql.error import GraphQLError
+    from graphql.error import format_error as format_graphql_error
+except ImportError:  # pragma: no cover - graphql-core>=3.2 removed format_error
+    from graphql import GraphQLError
 
-# import jsonpickle
-# from sqlalchemy.ext.declarative import DeclarativeMeta
+    def format_graphql_error(error):
+        return getattr(error, "formatted", {"message": str(error)})
+
+
+from sqlalchemy import create_engine, orm
+
+from .datetime_handler import PendulumDateTimeHandler
+from .json_handler import HighPerformanceJSONHandler
+from .performance_monitor import performance_monitor
 
 __author__ = "bibow"
 
-
-datetime_format = "%Y-%m-%dT%H:%M:%S%z"
-datetime_format_regex_patterns = [
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$",
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+|-]\d{4}$",
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+|-]\d{2}:\d{2}$",
-]
 
 INTROSPECTION_QUERY = """
 query IntrospectionQuery {
@@ -72,78 +70,8 @@ query IntrospectionQuery {
     }
 }"""
 
-
-class JSONEncoder(json.JSONEncoder):
-    def default(self, o):  # pylint: disable=E0202
-        if isinstance(o.__class__, DeclarativeMeta):
-
-            def convert_object_to_dict(obj, found=None):
-                if found is None:
-                    found = set()
-
-                mapper = orm.class_mapper(obj.__class__)
-                columns = [column.key for column in mapper.columns]
-                get_key_value = lambda c: (
-                    (c, getattr(obj, c).isoformat())
-                    if isinstance(getattr(obj, c), datetime)
-                    else (c, getattr(obj, c))
-                )
-                out = dict(map(get_key_value, columns))
-
-                for name, relation in mapper.relationships.items():
-                    if relation not in found:
-                        found.add(relation)
-                        related_obj = getattr(obj, name)
-
-                        if related_obj is not None:
-                            out[name] = (
-                                [
-                                    convert_object_to_dict(child, found)
-                                    for child in related_obj
-                                ]
-                                if relation.uselist
-                                else convert_object_to_dict(related_obj, found)
-                            )
-                return out
-
-            return convert_object_to_dict(o)
-        elif isinstance(o, Decimal):
-            if o.as_integer_ratio()[1] == 1:
-                return int(o)
-            return float(o)
-        elif hasattr(o, "attribute_values"):
-            return o.attribute_values
-        elif isinstance(o, (datetime, date)):
-            return o.strftime(datetime_format)
-        elif isinstance(o, (bytes, bytearray)):
-            return str(o)
-        elif hasattr(o, "__dict__"):
-            return o.__dict__
-        else:
-            return super(JSONEncoder, self).default(o)
-
-
-class JSONDecoder(json.JSONDecoder):
-    def __init__(self, *args, **kwargs):
-        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
-
-    def object_hook(self, o):  # pylint: disable=E0202
-        if o.get("_type") in ["bytes", "bytearray"]:
-            return str(o["value"])
-
-        for key, value in o.items():
-            try:
-                if not isinstance(value, str):
-                    continue
-                for datetime_format_regex_pattern in datetime_format_regex_patterns:
-                    datetime_format_regex = re.compile(datetime_format_regex_pattern)
-                    if datetime_format_regex.match(value):
-                        o[key] = dateutil.parser.parse(value)
-                        break
-            except (ValueError, AttributeError):
-                pass
-
-        return o
+_JSON_HANDLER = HighPerformanceJSONHandler()
+_DATETIME_HANDLER = PendulumDateTimeHandler()
 
 
 class Struct(object):
@@ -156,6 +84,10 @@ class Struct(object):
 
 
 class Utility(object):
+    json_handler = _JSON_HANDLER
+    datetime_handler = _DATETIME_HANDLER
+    performance_monitor = performance_monitor
+
     @staticmethod
     def format_error(error):
         if isinstance(error, GraphQLError):
@@ -165,24 +97,36 @@ class Utility(object):
 
     @staticmethod
     def json_dumps(data):
-        return json.dumps(
-            data,
-            indent=2,
-            sort_keys=True,
-            separators=(",", ": "),
-            cls=JSONEncoder,
-            ensure_ascii=False,
-        )
-        # return jsonpickle.encode(data, unpicklable=False)
+        return Utility.json_handler.dumps(data)
 
     @staticmethod
-    def json_loads(data, parser_number=True):
-        if parser_number:
-            return json.loads(
-                data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
-            )
-        return json.loads(data, cls=JSONDecoder)
-        # return jsonpickle.decode(data)
+    def json_loads(data, parser_number=True, validate=True):
+        return Utility.json_handler.loads(
+            data, parser_number=parser_number, validate=validate
+        )
+
+    @staticmethod
+    def get_json_performance_stats():
+        """Get comprehensive JSON performance statistics."""
+        return get_json_performance_stats()
+
+    @staticmethod
+    def reset_json_performance_stats():
+        """Reset JSON performance statistics."""
+        reset_json_performance_stats()
+
+    @staticmethod
+    def get_json_performance_summary():
+        """Get human-readable JSON performance summary."""
+        return performance_monitor.get_performance_summary()
+
+    @staticmethod
+    def get_library_info():
+        """Get information about performance libraries being used."""
+        return {
+            "json": Utility.json_handler.get_library_info(),
+            "datetime": Utility.datetime_handler.get_library_info(),
+        }
 
     # Check the specified ip exists in the given ip segment
     @staticmethod
@@ -329,11 +273,8 @@ class Utility(object):
 
     @staticmethod
     def is_json_string(string):
-        try:
-            json.loads(string)
-            return True
-        except:
-            return False
+        """Check if string is valid JSON using high-performance handler."""
+        return Utility.json_handler.is_json_string(string)
 
     @staticmethod
     def convert_object_to_dict(instance):
@@ -446,30 +387,36 @@ class Utility(object):
         params={},
         setting=None,
         test_mode=None,
+        execute_mode=None,
         aws_lambda=None,
         invocation_type="RequestResponse",
         message_group_id=None,
         task_queue=None,
     ):
+        effective_mode = execute_mode
+        if test_mode is not None:
+            if effective_mode is None:
+                warnings.warn(
+                    "test_mode is deprecated. Use execute_mode instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                effective_mode = test_mode
+            elif test_mode != execute_mode:
+                warnings.warn(
+                    "test_mode is ignored because execute_mode is provided.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
-        ## Test the waters 🧪 before diving in!
-        ##<--Testing Function-->##
-        if test_mode:
-            if test_mode == "local_for_all":
-                # Jump to the local function if these conditions meet.
+        if effective_mode:
+            if effective_mode == "local_for_all":
                 return Utility.invoke_funct_on_local(logger, setting, funct, **params)
-            elif (
-                test_mode == "local_for_sqs" and not message_group_id
-            ):  # Test websocket callback with SQS from local.
-                # Jump to the local function if these conditions meet.
+            if effective_mode == "local_for_sqs" and not message_group_id:
                 return Utility.invoke_funct_on_local(logger, setting, funct, **params)
-            elif (
-                test_mode == "local_for_aws_lambda" and task_queue is None
-            ):  # Test AWS Lambda calls from local.
+            if effective_mode == "local_for_aws_lambda" and task_queue is None:
                 pass
-        ##<--Testing Function-->##
 
-        # Process SQS message if message group and task queue are provided
         if message_group_id and task_queue:
             Utility._invoke_funct_on_aws_sqs(
                 logger,
@@ -481,7 +428,7 @@ class Utility(object):
                     "params": params,
                 },
             )
-            return  # Exit after SQS message sent
+            return
 
         result = Utility._invoke_funct_on_aws_lambda(
             logger,
@@ -512,6 +459,7 @@ class Utility(object):
         setting=None,
         connection_id=None,
         test_mode=None,
+        execute_mode=None,
         aws_lambda=None,
     ):
         params = {
@@ -526,6 +474,7 @@ class Utility(object):
             params=params,
             setting=setting,
             test_mode=test_mode,
+            execute_mode=execute_mode,
             aws_lambda=aws_lambda,
         )
 
@@ -536,6 +485,7 @@ class Utility(object):
         funct,
         setting=None,
         test_mode=None,
+        execute_mode=None,
         aws_lambda=None,
     ):
         schema = Utility.execute_graphql_query(
@@ -545,6 +495,7 @@ class Utility(object):
             query=INTROSPECTION_QUERY,
             setting=setting,
             test_mode=test_mode,
+            execute_mode=execute_mode,
             aws_lambda=aws_lambda,
         )["__schema"]
         return schema
