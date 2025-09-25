@@ -24,8 +24,20 @@ except ImportError:
 
     ORJSON_AVAILABLE = False
 
+# Import SQLAlchemy for legacy JSONEncoder
+try:
+    from sqlalchemy import orm
+    from sqlalchemy.ext.declarative import DeclarativeMeta
+
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
+    DeclarativeMeta = None
+
 # Import performance monitor
 from .performance_monitor import performance_monitor
+
+datetime_format = "%Y-%m-%dT%H:%M:%S%z"
 
 
 class JSONDecoder(json.JSONDecoder):
@@ -64,72 +76,108 @@ class HighPerformanceJSONHandler:
 
     @staticmethod
     def _serialize_handler(obj: Any, _depth: int = 0, _max_depth: int = 3) -> Any:
-        """Custom serialization handler for complex types with depth limiting."""
+        """Unified serialization handler for all types and situations."""
         if _depth >= _max_depth:
             return {"_truncated": True, "_type": str(type(obj).__name__)}
 
+        # Handle Decimal - convert whole numbers to int, others to float
         if isinstance(obj, Decimal):
-            # Convert Decimal to float to maintain JSON compatibility
-            # When parser_number=True is used during loads, it will be converted back to Decimal
+            if obj.as_integer_ratio()[1] == 1:
+                return int(obj)
             return float(obj)
+
+        # Handle datetime/date - use ISO format for consistency
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
-        elif hasattr(obj, "__table__"):  # SQLAlchemy model
-            return HighPerformanceJSONHandler._serialize_sqlalchemy_model(
+
+        # Handle SQLAlchemy models - use comprehensive approach
+        elif (
+            SQLALCHEMY_AVAILABLE
+            and DeclarativeMeta
+            and isinstance(obj.__class__, DeclarativeMeta)
+        ):
+            return HighPerformanceJSONHandler._serialize_sqlalchemy(
                 obj, _depth, _max_depth
             )
+
+        # Handle objects with attribute_values
+        elif hasattr(obj, "attribute_values"):
+            return obj.attribute_values
+
+        # Handle bytes/bytearray
+        elif isinstance(obj, (bytes, bytearray)):
+            return str(obj)
+
+        # Handle namedtuples
+        elif hasattr(obj, "_asdict"):
+            return obj._asdict()
+
+        # Handle custom objects with __dict__
         elif hasattr(obj, "__dict__"):
-            # Handle other custom objects with depth limiting
             return HighPerformanceJSONHandler._serialize_dict_with_depth(
                 obj.__dict__, _depth, _max_depth
             )
-        elif hasattr(obj, "_asdict"):
-            # Handle namedtuples
-            return obj._asdict()
+
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     @staticmethod
-    def _serialize_sqlalchemy_model(
-        obj: Any, _depth: int, _max_depth: int
-    ) -> Dict[str, Any]:
-        """Optimized SQLAlchemy model serialization with relationship handling."""
-        result = {}
+    def _serialize_sqlalchemy(obj: Any, _depth: int, _max_depth: int) -> Dict[str, Any]:
+        """Unified SQLAlchemy model serialization handling all cases."""
+        if not SQLALCHEMY_AVAILABLE:
+            return obj.__dict__ if hasattr(obj, "__dict__") else str(obj)
 
-        # Get column attributes (non-relationship fields)
-        for column in obj.__table__.columns:
-            value = getattr(obj, column.name, None)
-            if value is not None:
-                if isinstance(value, (datetime, date)):
-                    result[column.name] = value.isoformat()
-                elif isinstance(value, Decimal):
-                    result[column.name] = float(value)
-                else:
-                    result[column.name] = value
+        def convert_object_to_dict(obj, found=None):
+            if found is None:
+                found = set()
 
-        # Handle relationships with depth limiting
-        if _depth < _max_depth and hasattr(obj, "__mapper__"):
-            for relationship in obj.__mapper__.relationships:
-                rel_value = getattr(obj, relationship.key, None)
-                if rel_value is not None:
-                    if hasattr(rel_value, "__iter__") and not isinstance(
-                        rel_value, (str, bytes)
-                    ):
-                        # Collection relationship - limit to first 5 items
-                        result[relationship.key] = [
-                            HighPerformanceJSONHandler._serialize_handler(
-                                item, _depth + 1, _max_depth
-                            )
-                            for item in list(rel_value)[:5]
-                        ]
-                    else:
-                        # Single relationship
-                        result[relationship.key] = (
-                            HighPerformanceJSONHandler._serialize_handler(
-                                rel_value, _depth + 1, _max_depth
-                            )
-                        )
+            result = {}
 
-        return result
+            # Get column attributes (non-relationship fields)
+            if hasattr(obj, "__table__"):
+                mapper = orm.class_mapper(obj.__class__)
+                columns = [column.key for column in mapper.columns]
+
+                for col_key in columns:
+                    value = getattr(obj, col_key, None)
+                    if value is not None:
+                        if isinstance(value, (datetime, date)):
+                            result[col_key] = value.isoformat()
+                        elif isinstance(value, Decimal):
+                            if value.as_integer_ratio()[1] == 1:
+                                result[col_key] = int(value)
+                            else:
+                                result[col_key] = float(value)
+                        else:
+                            result[col_key] = value
+
+                # Handle relationships with depth limiting and circular reference prevention
+                if _depth < _max_depth and hasattr(obj, "__mapper__"):
+                    for relationship in mapper.relationships:
+                        if relationship not in found:
+                            found.add(relationship)
+                            rel_value = getattr(obj, relationship.key, None)
+
+                            if rel_value is not None:
+                                if hasattr(rel_value, "__iter__") and not isinstance(
+                                    rel_value, (str, bytes)
+                                ):
+                                    # Collection relationship - limit to first 5 items
+                                    result[relationship.key] = [
+                                        convert_object_to_dict(child, found.copy())
+                                        for child in list(rel_value)[:5]
+                                    ]
+                                else:
+                                    # Single relationship
+                                    result[relationship.key] = convert_object_to_dict(
+                                        rel_value, found.copy()
+                                    )
+            else:
+                # Fallback for objects without __table__
+                result = obj.__dict__ if hasattr(obj, "__dict__") else str(obj)
+
+            return result
+
+        return convert_object_to_dict(obj)
 
     @staticmethod
     def _serialize_dict_with_depth(
@@ -154,12 +202,12 @@ class HighPerformanceJSONHandler:
     @performance_monitor.monitor_json_operation("json_dumps")
     def dumps(obj: Any, compact: bool = True, **kwargs) -> str:
         """
-        High-performance JSON serialization.
+        High-performance JSON serialization with unified handler.
 
         Args:
             obj: Object to serialize
             compact: Whether to use compact formatting (default: True for backward compatibility)
-            **kwargs: Additional arguments (for compatibility)
+            **kwargs: Additional arguments (indent, sort_keys, separators, etc. for compatibility)
 
         Returns:
             JSON string
@@ -175,12 +223,14 @@ class HighPerformanceJSONHandler:
                 option=options,
             ).decode("utf-8")
         else:
-            # Fallback to standard json
-            indent = None if compact else 2
+            # Fallback to standard json with unified handler
+            # Use provided indent or default based on compact setting
+            if "indent" not in kwargs:
+                kwargs["indent"] = None if compact else 2
+
             return json.dumps(
                 obj,
                 default=HighPerformanceJSONHandler._serialize_handler,
-                indent=indent,
                 ensure_ascii=False,
                 **kwargs,
             )

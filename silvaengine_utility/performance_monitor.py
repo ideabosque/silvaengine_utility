@@ -28,7 +28,7 @@ class SimpleJSONPerformanceMonitor:
     - No memory overhead for stats collection
     """
 
-    def __init__(self, log_threshold: float = 0.0):
+    def __init__(self, log_threshold: float = 0.01):
         """
         Initialize the simple performance monitor.
 

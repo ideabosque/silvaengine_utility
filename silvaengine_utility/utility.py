@@ -3,14 +3,11 @@
 from __future__ import print_function
 
 import asyncio
-import json
 import re
 import socket
 import struct
 import traceback
 import warnings
-from datetime import date, datetime
-from decimal import Decimal
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
@@ -26,65 +23,12 @@ except ImportError:  # pragma: no cover - graphql-core>=3.2 removed format_error
 
 
 from sqlalchemy import create_engine, orm
-from sqlalchemy.ext.declarative import DeclarativeMeta
 
 from .datetime_handler import PendulumDateTimeHandler
 from .json_handler import HighPerformanceJSONHandler
 from .performance_monitor import performance_monitor
 
 __author__ = "bibow"
-
-datetime_format = "%Y-%m-%dT%H:%M:%S%z"
-
-
-class JSONEncoder(json.JSONEncoder):
-    def default(self, o):  # pylint: disable=E0202
-        if isinstance(o.__class__, DeclarativeMeta):
-
-            def convert_object_to_dict(obj, found=None):
-                if found is None:
-                    found = set()
-
-                mapper = orm.class_mapper(obj.__class__)
-                columns = [column.key for column in mapper.columns]
-                get_key_value = lambda c: (
-                    (c, getattr(obj, c).isoformat())
-                    if isinstance(getattr(obj, c), datetime)
-                    else (c, getattr(obj, c))
-                )
-                out = dict(map(get_key_value, columns))
-
-                for name, relation in mapper.relationships.items():
-                    if relation not in found:
-                        found.add(relation)
-                        related_obj = getattr(obj, name)
-
-                        if related_obj is not None:
-                            out[name] = (
-                                [
-                                    convert_object_to_dict(child, found)
-                                    for child in related_obj
-                                ]
-                                if relation.uselist
-                                else convert_object_to_dict(related_obj, found)
-                            )
-                return out
-
-            return convert_object_to_dict(o)
-        elif isinstance(o, Decimal):
-            if o.as_integer_ratio()[1] == 1:
-                return int(o)
-            return float(o)
-        elif hasattr(o, "attribute_values"):
-            return o.attribute_values
-        elif isinstance(o, (datetime, date)):
-            return o.strftime(datetime_format)
-        elif isinstance(o, (bytes, bytearray)):
-            return str(o)
-        elif hasattr(o, "__dict__"):
-            return o.__dict__
-        else:
-            return super(JSONEncoder, self).default(o)
 
 
 INTROSPECTION_QUERY = """
@@ -152,21 +96,16 @@ class Utility(object):
         return {"message": str(error)}
 
     @staticmethod
-    def json_dumps(data):
-        return Utility.jsonencode(data)
-
-    @staticmethod
-    @performance_monitor.monitor_json_operation("json_dumps")
-    def jsonencode(data, **kwargs):
-        return json.dumps(
-            data,
-            indent=2,
-            sort_keys=True,
-            separators=(",", ": "),
-            cls=JSONEncoder,
-            ensure_ascii=False,
-            **kwargs
-        )
+    def json_dumps(data, **kwargs):
+        # Use consistent formatting with original jsonencode behavior
+        defaults = {
+            'compact': False,
+            'indent': 2,
+            'sort_keys': True,
+            'separators': (",", ": ")
+        }
+        defaults.update(kwargs)
+        return Utility.json_handler.dumps(data, **defaults)
 
     @staticmethod
     def json_loads(data, parser_number=True, validate=True):
