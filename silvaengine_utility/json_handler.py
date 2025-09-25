@@ -194,7 +194,7 @@ class HighPerformanceJSONHandler:
         return result
 
     @staticmethod
-    @performance_monitor.monitor_json_operation("json_dumps")
+    @performance_monitor.monitor_operation(operation_name="json", log_threshold=0.0001)
     def dumps(obj: Any, compact: bool = True, **kwargs) -> str:
         """
         High-performance JSON serialization with unified handler.
@@ -231,7 +231,7 @@ class HighPerformanceJSONHandler:
             )
 
     @staticmethod
-    @performance_monitor.monitor_json_operation("json_loads")
+    @performance_monitor.monitor_operation(operation_name="json", log_threshold=0.0001)
     def loads(
         data: Union[str, bytes],
         parser_number: bool = True,

@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
-Simple JSON Performance Monitor
+Generic Performance Monitor
 
-Provides simple logging-based performance tracking for JSON operations.
+Provides simple logging-based performance tracking for any operations.
 """
 
 __author__ = "bibow"
@@ -13,13 +13,13 @@ import logging
 import time
 from typing import Callable
 
-# Create logger for JSON performance
-json_perf_logger = logging.getLogger("silvaengine_utility.json_performance")
+# Create logger for performance monitoring
+perf_logger = logging.getLogger("silvaengine_utility.performance")
 
 
-class SimpleJSONPerformanceMonitor:
+class SimplePerformanceMonitor:
     """
-    Simple performance monitor that logs JSON operation timing.
+    Simple performance monitor that logs operation timing.
 
     Features:
     - Minimal overhead logging-based monitoring
@@ -28,7 +28,7 @@ class SimpleJSONPerformanceMonitor:
     - No memory overhead for stats collection
     """
 
-    def __init__(self, log_threshold: float = 0.01):
+    def __init__(self, log_threshold: float = 0.1):
         """
         Initialize the simple performance monitor.
 
@@ -37,37 +37,46 @@ class SimpleJSONPerformanceMonitor:
         """
         self.log_threshold = log_threshold
 
-    def monitor_json_operation(self, operation_name: str):
+    def monitor_operation(
+        self, log_threshold: float = None, operation_name: str = None
+    ):
         """
-        Simple decorator for logging JSON operation performance.
+        Simple decorator for logging operation performance.
 
         Args:
-            operation_name: Name of the operation (json_dumps, json_loads)
+            log_threshold: Override threshold for this operation (in seconds)
+            operation_name: Optional name to prefix the operation log messages
 
         Returns:
-            Decorator function
+            Decorator function that wraps the target operation with performance monitoring
         """
+        _log_threshold = self.log_threshold
+        if log_threshold is not None:
+            _log_threshold = min(log_threshold, self.log_threshold)
 
         def decorator(func: Callable) -> Callable:
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 start_time = time.time()
+                op_name = (
+                    f"{operation_name}: {func.__name__}"
+                    if operation_name is not None
+                    else func.__name__
+                )
                 try:
                     result = func(*args, **kwargs)
                     duration = time.time() - start_time
 
                     # Simple logging of performance - only log slow operations
-                    if duration > self.log_threshold:
-                        json_perf_logger.info(
-                            f"{operation_name} completed in {duration:.4f}s"
-                        )
+                    if duration > _log_threshold:
+                        perf_logger.info(f"{op_name} completed in {duration:.4f}s")
 
                     return result
 
                 except Exception as e:
                     duration = time.time() - start_time
-                    json_perf_logger.warning(
-                        f"{operation_name} failed after {duration:.4f}s: {str(e)}"
+                    perf_logger.warning(
+                        f"{op_name} failed after {duration:.4f}s: {str(e)}"
                     )
                     raise
 
@@ -85,7 +94,7 @@ class SimpleJSONPerformanceMonitor:
 
 
 # Global performance monitor instance
-performance_monitor = SimpleJSONPerformanceMonitor()
+performance_monitor = SimplePerformanceMonitor()
 
 
 # Convenience functions for backward compatibility
