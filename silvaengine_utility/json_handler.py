@@ -17,7 +17,7 @@ from typing import Any, Dict, Union
 try:
     import orjson
 
-    ORJSON_AVAILABLE = False
+    ORJSON_AVAILABLE = True
     import json  # Still need for fallback and error handling
 except ImportError:
     import json
