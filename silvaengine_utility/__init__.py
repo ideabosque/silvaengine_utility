@@ -22,6 +22,7 @@ __all__ = [
     "get_json_performance_stats",
     "reset_json_performance_stats",
     "get_json_performance_summary",
+    "json_normalize",
     "Utility",
     "Struct",
 ]
@@ -39,6 +40,9 @@ from .http import HttpResponse
 from .json_handler import HighPerformanceJSONHandler, JSONHandler
 from .performance_monitor import performance_monitor
 from .utility import Struct, Utility
+
+# Convenience exports for common functions
+json_normalize = Utility.json_normalize
 
 try:
     from .graphql_utils import JSON, Graphql

@@ -37,8 +37,6 @@ except ImportError:
 # Import performance monitor
 from .performance_monitor import performance_monitor
 
-datetime_format = "%Y-%m-%dT%H:%M:%S%z"
-
 
 class JSONDecoder(json.JSONDecoder):
     """
@@ -53,14 +51,6 @@ class JSONDecoder(json.JSONDecoder):
         kwargs.setdefault("parse_float", Decimal)
         kwargs.setdefault("parse_int", Decimal)
         super().__init__(*args, **kwargs)
-
-    def decode(self, s, **kwargs):
-        """Decode JSON string with custom number handling."""
-        return super().decode(s, **kwargs)
-
-    def raw_decode(self, s, idx=0):
-        """Decode JSON string starting at idx with number parsing."""
-        return super().raw_decode(s, idx)
 
 
 class HighPerformanceJSONHandler:
@@ -80,8 +70,12 @@ class HighPerformanceJSONHandler:
         if _depth >= _max_depth:
             return {"_truncated": True, "_type": str(type(obj).__name__)}
 
+        # Handle basic JSON-serializable types (pass through unchanged)
+        if obj is None or isinstance(obj, (bool, int, float, str)):
+            return obj
+
         # Handle Decimal - convert whole numbers to int, others to float
-        if isinstance(obj, Decimal):
+        elif isinstance(obj, Decimal):
             if obj.as_integer_ratio()[1] == 1:
                 return int(obj)
             return float(obj)
@@ -240,7 +234,6 @@ class HighPerformanceJSONHandler:
     def loads(
         data: Union[str, bytes],
         parser_number: bool = True,
-        validate: bool = True,
         parse_datetime: bool = True,
         **kwargs,
     ) -> Any:
@@ -250,7 +243,6 @@ class HighPerformanceJSONHandler:
         Args:
             data: JSON string or bytes to parse
             parser_number: Whether to parse numbers as Decimal (True) or native types (False)
-            validate: Whether to validate JSON (for compatibility)
             parse_datetime: Whether to parse datetime strings
             **kwargs: Additional arguments (for compatibility)
 
@@ -283,6 +275,91 @@ class HighPerformanceJSONHandler:
         return result
 
     @staticmethod
+    def json_normalize(
+        obj: Any, parser_number: bool = True, parse_datetime: bool = True
+    ) -> Any:
+        """
+        Normalize data types as if going through JSON serialization/deserialization.
+
+        This function simulates the complete json_loads(json_dumps(obj)) cycle without
+        the overhead of actual JSON string creation and parsing.
+
+        Args:
+            obj: Object to normalize
+            parser_number: Whether to convert numbers back to Decimal after float conversion
+            parse_datetime: Whether to parse ISO datetime strings back to datetime objects
+
+        Returns:
+            Normalized object with types as if processed through json_loads(json_dumps(obj))
+        """
+        # Phase 1: Apply serialization transformations (like json_dumps)
+        serialized_form = HighPerformanceJSONHandler._serialize_object_recursive(obj)
+
+        # Phase 2: Apply deserialization transformations (like json_loads)
+        if parse_datetime:
+            serialized_form = HighPerformanceJSONHandler._parse_datetime_in_object(
+                serialized_form
+            )
+
+        if parser_number:
+            serialized_form = HighPerformanceJSONHandler._parse_numbers_to_decimal(
+                serialized_form
+            )
+
+        return serialized_form
+
+    @staticmethod
+    def _serialize_object_recursive(
+        obj: Any, _depth: int = 0, _max_depth: int = 3
+    ) -> Any:
+        """
+        Recursively apply serialization transformations without JSON encoding.
+        This mimics what happens during JSON serialization.
+        """
+        # Use the existing serialize handler for individual objects
+        if isinstance(obj, dict):
+            return {
+                key: HighPerformanceJSONHandler._serialize_object_recursive(
+                    value, _depth, _max_depth
+                )
+                for key, value in obj.items()
+            }
+        elif isinstance(obj, (list, tuple)):
+            return [
+                HighPerformanceJSONHandler._serialize_object_recursive(
+                    item, _depth, _max_depth
+                )
+                for item in obj
+            ]
+        else:
+            # Apply the same transformations as the serialize handler
+            return HighPerformanceJSONHandler._serialize_handler(
+                obj, _depth, _max_depth
+            )
+
+    @staticmethod
+    def _parse_numbers_to_decimal(obj: Any) -> Any:
+        """
+        Convert float numbers back to Decimal as json_loads would do when parser_number=True.
+        """
+        if isinstance(obj, dict):
+            return {
+                key: HighPerformanceJSONHandler._parse_numbers_to_decimal(value)
+                for key, value in obj.items()
+            }
+        elif isinstance(obj, (list, tuple)):
+            return [
+                HighPerformanceJSONHandler._parse_numbers_to_decimal(item)
+                for item in obj
+            ]
+        elif isinstance(obj, float):
+            return Decimal(str(obj))
+        elif isinstance(obj, int) and not isinstance(obj, bool):
+            return Decimal(obj)
+        else:
+            return obj
+
+    @staticmethod
     def _parse_datetime_in_object(obj: Any) -> Any:
         """
         Recursively parse datetime strings in JSON object.
@@ -311,20 +388,6 @@ class HighPerformanceJSONHandler:
             return parsed_dt if parsed_dt is not None else obj
         else:
             return obj
-
-    @staticmethod
-    def jsonencode(obj: Any, **kwargs) -> str:
-        """
-        Encode object to JSON string (alias for dumps method).
-
-        Args:
-            obj: Object to encode
-            **kwargs: Additional arguments passed to dumps
-
-        Returns:
-            JSON string
-        """
-        return HighPerformanceJSONHandler.dumps(obj, **kwargs)
 
     @staticmethod
     def is_json_string(data: str) -> bool:
