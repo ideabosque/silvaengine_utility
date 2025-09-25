@@ -69,6 +69,8 @@ class HighPerformanceJSONHandler:
             return {"_truncated": True, "_type": str(type(obj).__name__)}
 
         if isinstance(obj, Decimal):
+            # Convert Decimal to float to maintain JSON compatibility
+            # When parser_number=True is used during loads, it will be converted back to Decimal
             return float(obj)
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
@@ -150,13 +152,13 @@ class HighPerformanceJSONHandler:
 
     @staticmethod
     @performance_monitor.monitor_json_operation("json_dumps")
-    def dumps(obj: Any, compact: bool = False, **kwargs) -> str:
+    def dumps(obj: Any, compact: bool = True, **kwargs) -> str:
         """
         High-performance JSON serialization.
 
         Args:
             obj: Object to serialize
-            compact: Whether to use compact formatting
+            compact: Whether to use compact formatting (default: True for backward compatibility)
             **kwargs: Additional arguments (for compatibility)
 
         Returns:
@@ -259,6 +261,20 @@ class HighPerformanceJSONHandler:
             return parsed_dt if parsed_dt is not None else obj
         else:
             return obj
+
+    @staticmethod
+    def jsonencode(obj: Any, **kwargs) -> str:
+        """
+        Encode object to JSON string (alias for dumps method).
+
+        Args:
+            obj: Object to encode
+            **kwargs: Additional arguments passed to dumps
+
+        Returns:
+            JSON string
+        """
+        return HighPerformanceJSONHandler.dumps(obj, **kwargs)
 
     @staticmethod
     def is_json_string(data: str) -> bool:
