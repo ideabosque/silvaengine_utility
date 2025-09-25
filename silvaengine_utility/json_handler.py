@@ -20,6 +20,7 @@ try:
     ORJSON_AVAILABLE = True
     import json  # Still need for fallback and error handling
 except ImportError:
+    raise ImportError("orjson library is not installed. Please install orjson.")
     import json
 
     ORJSON_AVAILABLE = False
