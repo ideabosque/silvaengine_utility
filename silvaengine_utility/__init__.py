@@ -10,6 +10,7 @@ __all__ = [
     "common",
     "json_handler",
     "datetime_handler",
+    "cache",
     "HighPerformanceJSONHandler",
     "JSONHandler",
     "JSONPerformanceMonitor",
@@ -25,9 +26,17 @@ __all__ = [
     "json_normalize",
     "Utility",
     "Struct",
+    "HybridCacheEngine",
+    "hybrid_cache",
+    "method_cache",
 ]
 
 from .authorizer import Authorizer
+from .cache import (
+    HybridCacheEngine,
+    hybrid_cache,
+    method_cache,
+)
 from .common import Common
 from .datetime_handler import (
     DateTimeHandler,
