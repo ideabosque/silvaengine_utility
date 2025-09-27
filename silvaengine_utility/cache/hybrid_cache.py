@@ -169,31 +169,33 @@ class HybridCacheEngine:
         return None
 
     def set(self, key: str, value: Any, ttl: int = 300) -> bool:
-        """Set value in both caches."""
+        """Set value in cache (Redis primary, disk fallback)."""
         cache_key = self._generate_key("cache", key)
-        success = False
 
-        # Set in Redis
+        # Try Redis first
         if self._redis_available:
             try:
                 data = pickle.dumps(value)
                 self._redis_client.setex(cache_key, ttl, data)
-                success = True
+                return True
             except Exception as e:
                 self.logger.warning(f"Redis set error: {e}")
                 self._redis_available = False
 
-        # Set in disk cache
+        # Fallback to disk cache only if Redis failed
+        # Clean expired cache entries when using disk storage
+        self.clear_expired(ttl)
+
         disk_path = self._get_disk_path(cache_key)
         if disk_path:
             try:
                 with open(disk_path, "wb") as f:
                     pickle.dump(value, f)
-                success = True
+                return True
             except Exception as e:
                 self.logger.warning(f"Disk cache write error: {e}")
 
-        return success
+        return False
 
     def delete(self, key: str) -> bool:
         """Delete from both caches."""
@@ -217,6 +219,23 @@ class HybridCacheEngine:
                 pass
 
         return success
+
+    def clear_expired(self, ttl: int = 300) -> int:
+        """Clear expired cache entries from disk storage."""
+        count = 0
+
+        if not self._disk_cache_dir:
+            return count
+
+        try:
+            for file_path in self._disk_cache_dir.glob("*.cache"):
+                if self._is_disk_expired(file_path, ttl):
+                    file_path.unlink()
+                    count += 1
+        except Exception as e:
+            self.logger.debug(f"Error clearing expired cache: {e}")
+
+        return count
 
     def clear(self, pattern: str = "*") -> int:
         """Clear cache entries matching pattern."""
