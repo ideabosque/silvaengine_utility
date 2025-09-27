@@ -5,35 +5,37 @@ Provides robust caching for AWS Lambda environments with automatic failover
 from Redis to local disk storage when Redis is unavailable.
 """
 
-import json
-import pickle
 import hashlib
-import os
-import time
+import json
 import logging
-from typing import Any, Optional, Dict, Union
+import os
+import pickle
+import time
 from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
 try:
     import redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
     REDIS_AVAILABLE = False
 
+
 class HybridCacheEngine:
     """Generic hybrid cache with Redis primary and disk fallback."""
 
-    _instances: Dict[str, 'HybridCacheEngine'] = {}
+    _instances: Dict[str, "HybridCacheEngine"] = {}
 
-    def __new__(cls, cache_name: str = "default") -> 'HybridCacheEngine':
+    def __new__(cls, cache_name: str = "default") -> "HybridCacheEngine":
         if cache_name not in cls._instances:
             cls._instances[cache_name] = super().__new__(cls)
             cls._instances[cache_name]._initialized = False
         return cls._instances[cache_name]
 
     def __init__(self, cache_name: str = "default"):
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
         self.cache_name = cache_name
@@ -50,26 +52,32 @@ class HybridCacheEngine:
         """Initialize Redis with connection pooling and health checks."""
         if not REDIS_AVAILABLE:
             self._redis_available = False
-            self.logger.info(f"Redis module not available, using disk-only cache for {self.cache_name}")
+            self.logger.info(
+                f"Redis module not available, using disk-only cache for {self.cache_name}"
+            )
             return
 
         try:
             redis_config = {
-                'host': os.environ.get('REDIS_HOST', 'localhost'),
-                'port': int(os.environ.get('REDIS_PORT', 6379)),
-                'db': int(os.environ.get(f'REDIS_DB_{self.cache_name.upper()}',
-                                       os.environ.get('REDIS_DB', 0))),
-                'socket_connect_timeout': 1,
-                'socket_timeout': 1,
-                'retry_on_timeout': True,
-                'health_check_interval': 30,
-                'max_connections': 10,
-                'decode_responses': False
+                "host": os.environ.get("REDIS_HOST", "localhost"),
+                "port": int(os.environ.get("REDIS_PORT", 6379)),
+                "db": int(
+                    os.environ.get(
+                        f"REDIS_DB_{self.cache_name.upper()}",
+                        os.environ.get("REDIS_DB", 0),
+                    )
+                ),
+                "socket_connect_timeout": 1,
+                "socket_timeout": 1,
+                "retry_on_timeout": True,
+                "health_check_interval": 30,
+                "max_connections": 10,
+                "decode_responses": False,
             }
 
             # Add password if provided
-            if os.environ.get('REDIS_PASSWORD'):
-                redis_config['password'] = os.environ.get('REDIS_PASSWORD')
+            if os.environ.get("REDIS_PASSWORD"):
+                redis_config["password"] = os.environ.get("REDIS_PASSWORD")
 
             self._redis_client = redis.Redis(**redis_config)
             self._redis_client.ping()
@@ -82,13 +90,25 @@ class HybridCacheEngine:
 
     def _setup_disk_cache(self):
         """Setup disk cache with proper permissions."""
-        base_dir = os.environ.get('CACHE_DIR', '/tmp/silvaengine_cache')
+        # Use platform-appropriate temporary directory
+        import platform
+        import tempfile
+
+        if os.environ.get("CACHE_DIR"):
+            base_dir = os.environ.get("CACHE_DIR")
+        elif platform.system() == "Windows":
+            # On Windows, use TEMP directory
+            base_dir = os.path.join(tempfile.gettempdir(), "silvaengine_cache")
+        else:
+            # On Unix-like systems, use /tmp
+            base_dir = "/tmp/silvaengine_cache"
+
         self._disk_cache_dir = Path(base_dir) / self.cache_name
 
         try:
             self._disk_cache_dir.mkdir(parents=True, exist_ok=True)
             # Test write permissions
-            test_file = self._disk_cache_dir / '.test'
+            test_file = self._disk_cache_dir / ".test"
             test_file.touch()
             test_file.unlink()
             self.logger.info(f"Disk cache ready: {self._disk_cache_dir}")
@@ -111,8 +131,10 @@ class HybridCacheEngine:
         if not self._disk_cache_dir:
             return None
 
-        safe_key = "".join(c if c.isalnum() or c in "._-" else "_" for c in key)
-        return self._disk_cache_dir / f"{safe_key}.cache"
+        # Cache keys are already short and safe, use them directly as filenames
+        # Replace colons with underscores for filesystem compatibility
+        safe_filename = f"{key.replace(':', '_')}.cache"
+        return self._disk_cache_dir / safe_filename
 
     def _is_disk_expired(self, file_path: Path, ttl: int) -> bool:
         """Check if disk cache file is expired."""
@@ -123,7 +145,7 @@ class HybridCacheEngine:
 
     def get(self, key: str, ttl: int = 300) -> Optional[Any]:
         """Get value from cache (Redis first, disk fallback)."""
-        cache_key = key if ':' in key else f"{self.cache_name}:default:{key}"
+        cache_key = self._generate_key("cache", key)
 
         # Try Redis first
         if self._redis_available:
@@ -139,7 +161,7 @@ class HybridCacheEngine:
         disk_path = self._get_disk_path(cache_key)
         if disk_path and not self._is_disk_expired(disk_path, ttl):
             try:
-                with open(disk_path, 'rb') as f:
+                with open(disk_path, "rb") as f:
                     return pickle.load(f)
             except Exception as e:
                 self.logger.debug(f"Disk cache read error: {e}")
@@ -148,7 +170,7 @@ class HybridCacheEngine:
 
     def set(self, key: str, value: Any, ttl: int = 300) -> bool:
         """Set value in both caches."""
-        cache_key = key if ':' in key else f"{self.cache_name}:default:{key}"
+        cache_key = self._generate_key("cache", key)
         success = False
 
         # Set in Redis
@@ -165,17 +187,17 @@ class HybridCacheEngine:
         disk_path = self._get_disk_path(cache_key)
         if disk_path:
             try:
-                with open(disk_path, 'wb') as f:
+                with open(disk_path, "wb") as f:
                     pickle.dump(value, f)
                 success = True
             except Exception as e:
-                self.logger.debug(f"Disk cache write error: {e}")
+                self.logger.warning(f"Disk cache write error: {e}")
 
         return success
 
     def delete(self, key: str) -> bool:
         """Delete from both caches."""
-        cache_key = key if ':' in key else f"{self.cache_name}:default:{key}"
+        cache_key = self._generate_key("cache", key)
         success = False
 
         # Delete from Redis
@@ -223,11 +245,12 @@ class HybridCacheEngine:
     def stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         return {
-            'cache_name': self.cache_name,
-            'redis_available': self._redis_available,
-            'disk_available': self._disk_cache_dir is not None,
-            'disk_path': str(self._disk_cache_dir) if self._disk_cache_dir else None
+            "cache_name": self.cache_name,
+            "redis_available": self._redis_available,
+            "disk_available": self._disk_cache_dir is not None,
+            "disk_path": str(self._disk_cache_dir) if self._disk_cache_dir else None,
         }
+
 
 # Default cache instance
 default_cache = HybridCacheEngine()
