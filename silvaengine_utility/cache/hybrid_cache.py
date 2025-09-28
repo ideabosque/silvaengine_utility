@@ -44,8 +44,10 @@ class HybridCacheEngine:
         self._redis_available = False
         self._disk_cache_dir: Optional[Path] = None
 
-        self._setup_redis()
-        self._setup_disk_cache()
+        if self._redis_client:
+            self._setup_redis()
+        else:
+            self._setup_disk_cache()
         self._initialized = True
 
     def _setup_redis(self):
@@ -82,7 +84,7 @@ class HybridCacheEngine:
             self._redis_client = redis.Redis(**redis_config)
             self._redis_client.ping()
             self._redis_available = True
-            self.logger.info(f"Redis connected for cache: {self.cache_name}")
+            self.logger.debug(f"Redis connected for cache: {self.cache_name}")
 
         except Exception as e:
             self._redis_available = False
@@ -111,7 +113,7 @@ class HybridCacheEngine:
             test_file = self._disk_cache_dir / ".test"
             test_file.touch()
             test_file.unlink()
-            self.logger.info(f"Disk cache ready: {self._disk_cache_dir}")
+            self.logger.debug(f"Disk cache ready: {self._disk_cache_dir}")
         except Exception as e:
             self.logger.error(f"Disk cache setup failed for {self.cache_name}: {e}")
             self._disk_cache_dir = None
