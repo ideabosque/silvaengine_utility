@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Cache Decorators - Generic Caching Decorators for SilvaEngine
 
@@ -88,7 +89,7 @@ def method_cache(
     ttl: int = 300,
     cache_name: str = "method",
     include_class: bool = True,
-    include_method: bool = True
+    include_method: bool = True,
 ):
     """
     Generic cache decorator for class methods and functions.
@@ -124,6 +125,7 @@ def method_cache(
                 method_name = kwargs.get("_method_name")
                 if not method_name:
                     import inspect
+
                     frame = inspect.currentframe()
                     if frame and frame.f_back and frame.f_back.f_back:
                         method_name = frame.f_back.f_back.f_code.co_name
@@ -138,5 +140,3 @@ def method_cache(
         return ":".join(key_parts)
 
     return hybrid_cache(ttl=ttl, cache_name=cache_name, key_generator=key_gen)
-
-

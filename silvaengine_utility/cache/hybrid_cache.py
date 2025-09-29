@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Hybrid Cache Engine - Redis Primary with Disk Fallback
 
@@ -12,19 +13,21 @@ import os
 import pickle
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 try:
     import redis
+    from redis import Redis as RedisType
 
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
+    RedisType = Any
     REDIS_AVAILABLE = False
 
 
 class HybridCacheEngine:
-    """Generic hybrid cache with Redis primary and disk fallback."""
+    """Hybrid cache that prefers Redis with a disk-based fallback."""
 
     _instances: Dict[str, "HybridCacheEngine"] = {}
 
@@ -34,28 +37,30 @@ class HybridCacheEngine:
             cls._instances[cache_name]._initialized = False
         return cls._instances[cache_name]
 
-    def __init__(self, cache_name: str = "default"):
-        if hasattr(self, "_initialized") and self._initialized:
+    def __init__(self, cache_name: str = "default") -> None:
+        if getattr(self, "_initialized", False):
             return
 
         self.cache_name = cache_name
         self.logger = logging.getLogger(f"HybridCache.{cache_name}")
-        self._redis_client: Optional[redis.Redis] = None
+        self._redis_client: Optional[RedisType] = None
         self._redis_available = False
         self._disk_cache_dir: Optional[Path] = None
 
-        if self._redis_client:
-            self._setup_redis()
-        else:
-            self._setup_disk_cache()
+        self._setup_disk_cache()
+        self._setup_redis()
         self._initialized = True
 
-    def _setup_redis(self):
-        """Initialize Redis with connection pooling and health checks."""
+    # Redis helpers -----------------------------------------------------
+
+    def _setup_redis(self) -> None:
+        """Attempt to connect to Redis using environment configuration."""
         if not REDIS_AVAILABLE:
+            self._redis_client = None
             self._redis_available = False
-            self.logger.info(
-                f"Redis module not available, using disk-only cache for {self.cache_name}"
+            self.logger.debug(
+                "Redis module not available, using disk-only cache for %s",
+                self.cache_name,
             )
             return
 
@@ -77,45 +82,50 @@ class HybridCacheEngine:
                 "decode_responses": False,
             }
 
-            # Add password if provided
             if os.environ.get("REDIS_PASSWORD"):
                 redis_config["password"] = os.environ.get("REDIS_PASSWORD")
 
-            self._redis_client = redis.Redis(**redis_config)
+            self._redis_client = redis.Redis(**redis_config)  # type: ignore[assignment]
             self._redis_client.ping()
             self._redis_available = True
-            self.logger.debug(f"Redis connected for cache: {self.cache_name}")
-
-        except Exception as e:
+            self.logger.debug("Redis connected for cache: %s", self.cache_name)
+        except Exception as exc:  # pragma: no cover - external dependency
+            self._redis_client = None
             self._redis_available = False
-            self.logger.warning(f"Redis unavailable for {self.cache_name}: {e}")
+            self.logger.warning("Redis unavailable for %s: %s", self.cache_name, exc)
 
-    def _setup_disk_cache(self):
-        """Setup disk cache with proper permissions."""
-        # Use platform-appropriate temporary directory
+    def _ensure_redis(self) -> None:
+        """Ensure Redis is ready before using it."""
+        if self._redis_available and self._redis_client:
+            return
+        self._setup_redis()
+
+    # Disk helpers ------------------------------------------------------
+
+    def _setup_disk_cache(self) -> None:
+        """Prepare disk cache directory."""
         import platform
         import tempfile
 
         if os.environ.get("CACHE_DIR"):
             base_dir = os.environ.get("CACHE_DIR")
         elif platform.system() == "Windows":
-            # On Windows, use TEMP directory
             base_dir = os.path.join(tempfile.gettempdir(), "silvaengine_cache")
         else:
-            # On Unix-like systems, use /tmp
             base_dir = "/tmp/silvaengine_cache"
 
         self._disk_cache_dir = Path(base_dir) / self.cache_name
 
         try:
             self._disk_cache_dir.mkdir(parents=True, exist_ok=True)
-            # Test write permissions
             test_file = self._disk_cache_dir / ".test"
             test_file.touch()
             test_file.unlink()
-            self.logger.debug(f"Disk cache ready: {self._disk_cache_dir}")
-        except Exception as e:
-            self.logger.error(f"Disk cache setup failed for {self.cache_name}: {e}")
+            self.logger.debug("Disk cache ready: %s", self._disk_cache_dir)
+        except Exception as exc:  # pragma: no cover - depends on environment
+            self.logger.error(
+                "Disk cache setup failed for %s: %s", self.cache_name, exc
+            )
             self._disk_cache_dir = None
 
     def _generate_key(self, prefix: str, key_data: Any) -> str:
@@ -129,142 +139,157 @@ class HybridCacheEngine:
         return f"{self.cache_name}:{prefix}:{key_hash}"
 
     def _get_disk_path(self, key: str) -> Optional[Path]:
-        """Get safe disk cache file path."""
         if not self._disk_cache_dir:
             return None
-
-        # Cache keys are already short and safe, use them directly as filenames
-        # Replace colons with underscores for filesystem compatibility
         safe_filename = f"{key.replace(':', '_')}.cache"
         return self._disk_cache_dir / safe_filename
 
-    def _is_disk_expired(self, file_path: Path, ttl: int) -> bool:
-        """Check if disk cache file is expired."""
+    def _load_disk_record(self, file_path: Path) -> Optional[Dict[str, Any]]:
         if not file_path.exists():
-            return True
-        file_age = time.time() - file_path.stat().st_mtime
-        return file_age > ttl
+            return None
 
-    def get(self, key: str, ttl: int = 300) -> Optional[Any]:
-        """Get value from cache (Redis first, disk fallback)."""
-        cache_key = self._generate_key("cache", key)
+        try:
+            with file_path.open("rb") as handle:
+                record = pickle.load(handle)
+        except Exception as exc:
+            self.logger.debug("Disk cache read error (%s): %s", file_path.name, exc)
+            return None
 
-        # Try Redis first
-        if self._redis_available:
-            try:
-                data = self._redis_client.get(cache_key)
-                if data:
-                    return pickle.loads(data)
-            except Exception as e:
-                self.logger.warning(f"Redis get error: {e}")
-                self._redis_available = False
+        if isinstance(record, dict) and "expires_at" in record and "value" in record:
+            return record
 
-        # Fallback to disk
-        disk_path = self._get_disk_path(cache_key)
-        if disk_path and not self._is_disk_expired(disk_path, ttl):
-            try:
-                with open(disk_path, "rb") as f:
-                    return pickle.load(f)
-            except Exception as e:
-                self.logger.debug(f"Disk cache read error: {e}")
-
+        self._safe_remove(file_path)
         return None
 
-    def set(self, key: str, value: Any, ttl: int = 300) -> bool:
-        """Set value in cache (Redis primary, disk fallback)."""
+    def _write_disk_record(
+        self, file_path: Path, value: Any, expires_at: float
+    ) -> bool:
+        try:
+            with file_path.open("wb") as handle:
+                pickle.dump({"expires_at": expires_at, "value": value}, handle)
+            return True
+        except Exception as exc:  # pragma: no cover - disk specific
+            self.logger.warning(
+                "Disk cache write error for %s: %s", file_path.name, exc
+            )
+            return False
+
+    def _safe_remove(self, file_path: Path) -> bool:
+        try:
+            file_path.unlink()
+            return True
+        except FileNotFoundError:
+            return False
+        except Exception as exc:  # pragma: no cover - disk specific
+            self.logger.debug("Disk cache delete error (%s): %s", file_path.name, exc)
+            return False
+
+    # Public API --------------------------------------------------------
+
+    def get(self, key: str, ttl: int = 300) -> Optional[Any]:
         cache_key = self._generate_key("cache", key)
 
-        # Try Redis first
-        if self._redis_available:
+        self._ensure_redis()
+        if self._redis_available and self._redis_client:
+            try:
+                data = self._redis_client.get(cache_key)
+                if data is not None:
+                    return pickle.loads(data)
+            except Exception as exc:
+                self.logger.warning("Redis get error for %s: %s", cache_key, exc)
+                self._redis_available = False
+
+        disk_path = self._get_disk_path(cache_key)
+        if not disk_path:
+            return None
+
+        record = self._load_disk_record(disk_path)
+        if not record:
+            self._safe_remove(disk_path)
+            return None
+
+        if record["expires_at"] <= time.time():
+            self._safe_remove(disk_path)
+            return None
+
+        return record["value"]
+
+    def set(self, key: str, value: Any, ttl: int = 300) -> bool:
+        cache_key = self._generate_key("cache", key)
+
+        self._ensure_redis()
+        if self._redis_available and self._redis_client:
             try:
                 data = pickle.dumps(value)
                 self._redis_client.setex(cache_key, ttl, data)
                 return True
-            except Exception as e:
-                self.logger.warning(f"Redis set error: {e}")
+            except Exception as exc:
+                self.logger.warning("Redis set error for %s: %s", cache_key, exc)
                 self._redis_available = False
 
-        # Fallback to disk cache only if Redis failed
-        # Clean expired cache entries when using disk storage
-        self.clear_expired(ttl)
-
         disk_path = self._get_disk_path(cache_key)
-        if disk_path:
-            try:
-                with open(disk_path, "wb") as f:
-                    pickle.dump(value, f)
-                return True
-            except Exception as e:
-                self.logger.warning(f"Disk cache write error: {e}")
+        if not disk_path:
+            return False
 
-        return False
+        now = time.time()
+        self.clear_expired(now=now)
+        return self._write_disk_record(disk_path, value, now + ttl)
 
     def delete(self, key: str) -> bool:
-        """Delete from both caches."""
         cache_key = self._generate_key("cache", key)
         success = False
 
-        # Delete from Redis
-        if self._redis_available:
+        self._ensure_redis()
+        if self._redis_available and self._redis_client:
             try:
                 success |= bool(self._redis_client.delete(cache_key))
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Redis delete error for %s: %s", cache_key, exc)
 
-        # Delete from disk
         disk_path = self._get_disk_path(cache_key)
-        if disk_path and disk_path.exists():
-            try:
-                disk_path.unlink()
-                success = True
-            except Exception:
-                pass
+        if disk_path:
+            success |= self._safe_remove(disk_path)
 
         return success
 
-    def clear_expired(self, ttl: int = 300) -> int:
-        """Clear expired cache entries from disk storage."""
-        count = 0
-
+    def clear_expired(
+        self,
+        now: Optional[float] = None,
+    ) -> int:
         if not self._disk_cache_dir:
-            return count
+            return 0
 
-        try:
-            for file_path in self._disk_cache_dir.glob("*.cache"):
-                if self._is_disk_expired(file_path, ttl):
-                    file_path.unlink()
-                    count += 1
-        except Exception as e:
-            self.logger.debug(f"Error clearing expired cache: {e}")
+        current_time = now or time.time()
+        removed = 0
 
-        return count
+        for file_path in self._disk_cache_dir.glob("*.cache"):
+            record = self._load_disk_record(file_path)
+            if not record or record.get("expires_at", 0) <= current_time:
+                removed += int(self._safe_remove(file_path))
+
+        return removed
 
     def clear(self, pattern: str = "*") -> int:
-        """Clear cache entries matching pattern."""
         count = 0
 
-        # Clear Redis
-        if self._redis_available:
+        self._ensure_redis()
+        if self._redis_available and self._redis_client:
             try:
-                keys = self._redis_client.keys(f"{self.cache_name}:{pattern}")
+                keys_pattern = f"{self.cache_name}:{pattern}"
+                keys = list(self._redis_client.scan_iter(match=keys_pattern))
                 if keys:
                     count += self._redis_client.delete(*keys)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("Redis clear error for pattern %s: %s", pattern, exc)
 
-        # Clear disk
         if self._disk_cache_dir:
-            try:
-                for file_path in self._disk_cache_dir.glob("*.cache"):
-                    file_path.unlink()
-                    count += 1
-            except Exception:
-                pass
+            disk_pattern = f"{self.cache_name}:{pattern}".replace(":", "_")
+            for file_path in self._disk_cache_dir.glob(f"{disk_pattern}.cache"):
+                count += int(self._safe_remove(file_path))
 
         return count
 
     def stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
         return {
             "cache_name": self.cache_name,
             "redis_available": self._redis_available,
