@@ -24,6 +24,7 @@ __all__ = [
     "reset_json_performance_stats",
     "get_json_performance_summary",
     "json_normalize",
+    "convert_decimal_to_number",
     "Utility",
     "Struct",
     "HybridCacheEngine",
@@ -52,6 +53,7 @@ from .utility import Struct, Utility
 
 # Convenience exports for common functions
 json_normalize = Utility.json_normalize
+convert_decimal_to_number = HighPerformanceJSONHandler.convert_decimal_to_number
 
 try:
     from .graphql_utils import JSON, Graphql

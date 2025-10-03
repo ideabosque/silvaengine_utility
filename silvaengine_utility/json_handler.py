@@ -361,6 +361,35 @@ class HighPerformanceJSONHandler:
             return obj
 
     @staticmethod
+    def convert_decimal_to_number(obj: Any) -> Any:
+        """
+        Recursively convert all Decimal values in dict/list/tuple to float or int.
+
+        Args:
+            obj: Object to process (dict, list, tuple, or any value)
+
+        Returns:
+            Object with all Decimal values converted to int (if whole number) or float
+        """
+        if isinstance(obj, dict):
+            return {
+                key: HighPerformanceJSONHandler.convert_decimal_to_number(value)
+                for key, value in obj.items()
+            }
+        elif isinstance(obj, (list, tuple)):
+            converted = [
+                HighPerformanceJSONHandler.convert_decimal_to_number(item)
+                for item in obj
+            ]
+            return type(obj)(converted)
+        elif isinstance(obj, Decimal):
+            if obj.as_integer_ratio()[1] == 1:
+                return int(obj)
+            return float(obj)
+        else:
+            return obj
+
+    @staticmethod
     def _parse_datetime_in_object(obj: Any) -> Any:
         """
         Recursively parse datetime strings in JSON object.
