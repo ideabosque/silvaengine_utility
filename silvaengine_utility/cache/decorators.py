@@ -49,7 +49,8 @@ def hybrid_cache(
 
             # Generate cache key
             if key_generator:
-                cache_key = key_generator(*args, **kwargs)
+                key_data = key_generator(*args, **kwargs)
+                cache_key = cache_engine._generate_key(func_prefix, key_data)
             else:
                 cache_key = cache_engine._generate_key(
                     func_prefix, {"args": args, "kwargs": kwargs}
@@ -72,10 +73,9 @@ def hybrid_cache(
         # Add cache control methods
         wrapper.cache_clear = lambda: cache_engine.clear(f"{func_prefix}:*")
         wrapper.cache_delete = lambda *args, **kwargs: cache_engine.delete(
-            key_generator(*args, **kwargs)
-            if key_generator
-            else cache_engine._generate_key(
-                func_prefix, {"args": args, "kwargs": kwargs}
+            cache_engine._generate_key(
+                func_prefix,
+                key_generator(*args, **kwargs) if key_generator else {"args": args, "kwargs": kwargs}
             )
         )
         wrapper.cache_stats = lambda: cache_engine.stats()
@@ -115,7 +115,16 @@ def method_cache(
         key_parts = []
 
         # Handle instance methods (skip 'self')
-        if args and hasattr(args[0], "__class__"):
+        # Check if first arg is likely 'self' - should have __dict__ or be a class instance
+        # Exclude primitive types (str, int, float, bool, etc.) and built-in types
+        is_instance_method = (
+            args
+            and hasattr(args[0], "__class__")
+            and hasattr(args[0], "__dict__")
+            and not isinstance(args[0], (str, int, float, bool, bytes, type(None)))
+        )
+
+        if is_instance_method:
             if include_class:
                 class_name = args[0].__class__.__name__
                 key_parts.append(class_name)
