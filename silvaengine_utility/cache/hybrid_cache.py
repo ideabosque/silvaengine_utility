@@ -64,9 +64,17 @@ class HybridCacheEngine:
             )
             return
 
+        if os.environ.get("REDIS_HOST") is None:
+            self._redis_client = None
+            self._redis_available = False
+            self.logger.debug(
+                "Redis not configured, using disk-only cache for %s", self.cache_name
+            )
+            return
+
         try:
             redis_config = {
-                "host": os.environ.get("REDIS_HOST", "localhost"),
+                "host": os.environ.get("REDIS_HOST"),
                 "port": int(os.environ.get("REDIS_PORT", 6379)),
                 "db": int(
                     os.environ.get(
