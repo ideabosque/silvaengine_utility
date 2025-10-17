@@ -10,8 +10,9 @@ __author__ = "bibow"
 
 import functools
 import logging
-import time
 from typing import Callable
+
+import pendulum
 
 # Create logger for performance monitoring
 perf_logger = logging.getLogger("silvaengine_utility.performance")
@@ -35,7 +36,7 @@ class SimplePerformanceMonitor:
         Args:
             log_threshold: Only log operations that take longer than this threshold (in seconds)
         """
-        self.log_threshold = log_threshold
+        self.log_threshold = log_threshold  # Store in seconds for backward compatibility
 
     def monitor_operation(
         self, log_threshold: float = None, operation_name: str = None
@@ -57,7 +58,7 @@ class SimplePerformanceMonitor:
         def decorator(func: Callable) -> Callable:
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                start_time = time.time()
+                start_time = pendulum.now("UTC")
                 op_name = (
                     f"{operation_name}: {func.__name__}"
                     if operation_name is not None
@@ -65,18 +66,19 @@ class SimplePerformanceMonitor:
                 )
                 try:
                     result = func(*args, **kwargs)
-                    duration = time.time() - start_time
+                    duration_ms = (pendulum.now("UTC") - start_time).total_seconds() * 1000
 
                     # Simple logging of performance - only log slow operations
-                    if duration > _log_threshold:
-                        perf_logger.info(f"{op_name} completed in {duration:.4f}s")
+                    # Convert threshold from seconds to milliseconds for comparison
+                    if duration_ms > (_log_threshold * 1000):
+                        perf_logger.info(f"{op_name} completed in {duration_ms:.2f}ms")
 
                     return result
 
                 except Exception as e:
-                    duration = time.time() - start_time
+                    duration_ms = (pendulum.now("UTC") - start_time).total_seconds() * 1000
                     perf_logger.warning(
-                        f"{op_name} failed after {duration:.4f}s: {str(e)}"
+                        f"{op_name} failed after {duration_ms:.2f}ms: {str(e)}"
                     )
                     raise
 
