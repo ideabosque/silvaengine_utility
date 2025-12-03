@@ -8,5 +8,4 @@ from .authorizer import Authorizer
 from .common import Common
 from .http import HttpResponse
 from .utility import Struct, Utility
-from .graphql import JSON
 # from .graphql import JSON, Graphql
