@@ -15,8 +15,6 @@ from importlib.util import find_spec
 from types import FunctionType
 
 import dateutil
-from graphql.error import GraphQLError
-from graphql.error import format_error as format_graphql_error
 from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
@@ -158,9 +156,6 @@ class Struct(object):
 class Utility(object):
     @staticmethod
     def format_error(error):
-        if isinstance(error, GraphQLError):
-            return format_graphql_error(error)
-
         return {"message": str(error)}
 
     @staticmethod
