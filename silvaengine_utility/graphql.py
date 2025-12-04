@@ -44,11 +44,11 @@ class Graphql(object):
                 if execution_result.data:
                     return self._success_response(execution_result.data)
                 elif execution_result.errors:
-                    return self._error_response([Utility.format_error(e) for e in execution_result.errors])
+                    return self._error_response([Utility.format_error(e) for e in execution_result.errors], 500)
                 elif execution_result.invalid:
-                    return self._error_response("Invalid execution result.")
+                    return self._error_response("Invalid execution result.", 500)
 
-            return self._error_response("Uncaught execution error.")
+            return self._error_response("Uncaught execution error.", 500)
         except Exception as e:
             raise e
         
