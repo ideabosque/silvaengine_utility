@@ -204,50 +204,84 @@ class Utility(object):
     def is_static_method(callable_method):
         return callable(callable_method) and type(callable_method) is FunctionType
 
-    # Import the module dynamically
     @staticmethod
     def import_dynamically(
         module_name, function_name, class_name=None, constructor_parameters=None
     ):
+        """
+        Dynamically imports a module and retrieves a function or method.
+        
+        This method loads a module dynamically, optionally instantiates a class from that module,
+        and returns a callable function or method.
+        
+        Args:
+            module_name (str): The name of the module to import.
+            function_name (str): The name of the function/method to retrieve.
+            class_name (str, optional): The name of the class containing the method. Defaults to None.
+            constructor_parameters (dict, optional): Parameters to pass to the class constructor.
+                Defaults to None.
+        
+        Returns:
+            callable or None: The requested function/method if found and accessible, otherwise None.
+        
+        Raises:
+            TypeError: If parameters are of incorrect types.
+            ImportError: If the module cannot be imported.
+            AttributeError: If the class or function does not exist in the specified module.
+        """
+        # Validate required parameters
         if not module_name or not function_name:
             return None
-
-        module_name = str(module_name).strip()
-        function_name = str(function_name).strip()
-
-        # 1. Load module by dynamic
-        spec = find_spec(name=module_name, package=module_name)
-
-        if spec is None:
-            return None
-
-        agent = import_module(name=module_name, package=module_name)
-        # agent = __import__("{}.{}".format(module_name, module_name))
-
-        if not agent:
-            return None
-
-        if class_name and hasattr(agent, str(class_name).strip()):
-            class_name = str(class_name).strip()
-
-            if type(constructor_parameters) is dict and len(
-                constructor_parameters.keys()
-            ):
-                agent = getattr(agent, class_name)(**constructor_parameters)
-            elif Utility.is_static_method(
-                getattr(getattr(agent, class_name), function_name)
-            ):
-                agent = getattr(agent, class_name)
+        
+        # Clean and validate parameters
+        try:
+            module_name = str(module_name).strip()
+            function_name = str(function_name).strip()
+            class_name = str(class_name).strip() if class_name else None
+        except (TypeError, ValueError) as e:
+            raise TypeError(f"Invalid parameter type: {e}")
+        
+        # Import module directly without find_spec to improve performance
+        try:
+            module = import_module(module_name)
+        except ImportError as e:
+            raise ImportError(f"Failed to import module '{module_name}': {e}")
+        
+        # Handle class instantiation if specified
+        target_obj = module
+        if class_name:
+            # Get class from module
+            try:
+                cls = getattr(module, class_name)
+            except AttributeError as e:
+                raise AttributeError(f"Class '{class_name}' not found in module '{module_name}': {e}")
+            
+            # Instantiate class or use class itself for static methods
+            if constructor_parameters is not None:
+                if not isinstance(constructor_parameters, dict):
+                    raise TypeError("constructor_parameters must be a dictionary")
+                target_obj = cls(**constructor_parameters)
             else:
+                # Check if method is static before deciding how to get it
                 try:
-                    agent = getattr(agent, class_name)()
-                except:
-                    return None
-
-        if not hasattr(agent, function_name):
-            return None
-
-        return getattr(agent, function_name)
+                    method = getattr(cls, function_name)
+                    if Utility.is_static_method(method):
+                        # For static methods, we can use the class itself
+                        target_obj = cls
+                    else:
+                        # For instance methods, we need to instantiate the class
+                        try:
+                            target_obj = cls()
+                        except Exception as e:
+                            raise TypeError(f"Failed to instantiate class '{class_name}': {e}")
+                except AttributeError as e:
+                    raise AttributeError(f"Method '{function_name}' not found in class '{class_name}': {e}")
+        
+        # Get the requested function/method
+        try:
+            return getattr(target_obj, function_name)
+        except AttributeError as e:
+            raise AttributeError(f"Function '{function_name}' not found in target object: {e}")
 
     # Call function by async
     @staticmethod
