@@ -5,154 +5,204 @@ from __future__ import print_function
 __author__ = "bl"
 
 import graphene
+from .utility import Utility
 from graphql import parse
-from graphql.language.ast import (
-    SelectionSet,
-    BooleanValue,
-    StringValue,
-    IntValue,
-    ListValue,
-    ObjectValue,
-    FloatValue,
-)
+from graphql.language import ast
 
 
 class Graphql(object):
     # Parse the graphql request's body to AST and extract fields from the AST
-    @staticmethod
-    def extract_fields_from_ast(source, **kwargs):
-        def extract_by_recursion(selections, **kwargs):
-            fs = []
-            dpt = kwargs.get("deepth")
+    def __init__(self, logger, **setting):
+        self.logger = logger
+        self.setting = setting
 
-            if type(dpt) is not int or dpt < 1:
-                dpt = None
-            else:
-                dpt -= 1
+    def execute(self, schema, **params):
+        try:
+            context = {
+                "logger": self.logger,
+                "setting": self.setting,
+                "endpointId": params.get("endpoint_id"),
+                "connectionId": params.get("connection_id"),
+            }
 
-            for s in selections:
-                if not (s.name.value in fs):
-                    fs.append(s.name.value.lower())
+            if params.get("context"):
+                context = dict(context, **params["context"])
 
-                if (
-                    (dpt is None or dpt > 0)
-                    and hasattr(s, "selection_set")
-                    and type(s.selection_set) is SelectionSet
-                    and type(s.selection_set.selections) is list
-                    and len(s.selection_set.selections) > 0
-                ):
-                    fs += extract_by_recursion(s.selection_set.selections, deepth=dpt)
+            query = params.get("query")
 
-            return fs
+            if not query:
+                return self._error_response("Invalid operations.")
 
-        result = dict()
-        operation = kwargs.get("operation")
-        deepth = kwargs.get("deepth")
-        ast = parse(source)
+            execution_result = schema.execute(
+                query,
+                context_value=context,
+                variable_values=params.get("variables", {}),
+                operation_name=params.get("operation_name"),
+            )
 
-        for od in ast.definitions:
-            on = od.operation.lower()
+            if execution_result:
+                if execution_result.data:
+                    return self._success_response(execution_result.data)
+                elif execution_result.errors:
+                    return self._error_response([Utility.format_error(e) for e in execution_result.errors])
+                elif execution_result.invalid:
+                    return self._error_response("Invalid execution result.")
 
-            if operation and on != operation.lower():
-                continue
+            return self._error_response("Uncaught execution error.")
+        except Exception as e:
+            raise e
+        
+    def _success_response(self, data):
+        return self._format_response(data)
+    
+    def _error_response(self, errors, status_code=400):
+        return self._format_response({"errors": errors}, status_code)
+    
+    def _format_response(self, data, status_code=200):
+        return {
+            "statusCode": status_code,
+            "headers": {
+                "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json",
+            },
+            "body": Utility.json_dumps(data),
+        }
 
-            result[on] = [od.name.value]
+    # @staticmethod
+    # def extract_fields_from_ast(source, **kwargs):
+    #     def extract_by_recursion(selections, **kwargs):
+    #         fs = []
+    #         dpt = kwargs.get("deepth")
 
-            if on in result:
-                result[on] += extract_by_recursion(
-                    od.selection_set.selections, deepth=deepth
-                )
-            else:
-                result[on] = extract_by_recursion(
-                    od.selection_set.selections, deepth=deepth
-                )
+    #         if type(dpt) is not int or dpt < 1:
+    #             dpt = None
+    #         else:
+    #             dpt -= 1
 
-        for operation in result:
-            result[operation] = list({}.fromkeys(result[operation]).keys())
+    #         for s in selections:
+    #             if not (s.name.value in fs):
+    #                 fs.append(s.name.value.lower())
 
-        return result
+    #             if (
+    #                 (dpt is None or dpt > 0)
+    #                 and hasattr(s, "selection_set")
+    #                 and type(s.selection_set) is SelectionSet
+    #                 and type(s.selection_set.selections) is list
+    #                 and len(s.selection_set.selections) > 0
+    #             ):
+    #                 fs += extract_by_recursion(s.selection_set.selections, deepth=dpt)
 
-    @staticmethod
-    def extract_flatten_ast(source):
-        def extract_by_recursion(selections, path=""):
-            fields = []
+    #         return fs
 
-            if not path or path[-1] != "/":
-                path += "/"
+    #     result = dict()
+    #     operation = kwargs.get("operation")
+    #     deepth = kwargs.get("deepth")
+    #     ast = parse(source)
 
-            for field in selections:
-                if (
-                    not hasattr(field, "name")
-                    or field.name is None
-                    or not hasattr(field.name, "value")
-                    or not field.name.value
-                ):
-                    continue
+    #     for od in ast.definitions:
+    #         on = od.operation.lower()
 
-                value = field.name.value.strip().lower()
+    #         if operation and on != operation.lower():
+    #             continue
 
-                fields.append({"field": value, "path": path.strip().lower()})
+    #         result[on] = [od.name.value]
 
-                if (
-                    hasattr(field, "selection_set")
-                    and type(field.selection_set) is SelectionSet
-                    and type(field.selection_set.selections) is list
-                    and len(field.selection_set.selections) > 0
-                ):
-                    fields += extract_by_recursion(
-                        field.selection_set.selections, path + value
-                    )
+    #         if on in result:
+    #             result[on] += extract_by_recursion(
+    #                 od.selection_set.selections, deepth=deepth
+    #             )
+    #         else:
+    #             result[on] = extract_by_recursion(
+    #                 od.selection_set.selections, deepth=deepth
+    #             )
 
-            return fields
+    #     for operation in result:
+    #         result[operation] = list({}.fromkeys(result[operation]).keys())
 
-        def flatten(selections):
-            output = {}
+    #     return result
 
-            for item in extract_by_recursion(selections):
-                if output.get(item.get("path")) is None:
-                    output[item.get("path")] = []
+    # @staticmethod
+    # def extract_flatten_ast(source):
+    #     def extract_by_recursion(selections, path=""):
+    #         fields = []
 
-                if item.get("field") is not None and item.get("field") != "":
-                    output[item.get("path")].append(item.get("field"))
+    #         if not path or path[-1] != "/":
+    #             path += "/"
 
-            return output
+    #         for field in selections:
+    #             if (
+    #                 not hasattr(field, "name")
+    #                 or field.name is None
+    #                 or not hasattr(field.name, "value")
+    #                 or not field.name.value
+    #             ):
+    #                 continue
 
-        results = []
-        ast = parse(source)
+    #             value = field.name.value.strip().lower()
 
-        if (
-            ast
-            and hasattr(ast, "definitions")
-            and type(ast.definitions) is list
-            and len(ast.definitions)
-        ):
-            for operation_definition in ast.definitions:
-                result = {}
+    #             fields.append({"field": value, "path": path.strip().lower()})
 
-                if hasattr(operation_definition, "operation"):
-                    result["operation"] = operation_definition.operation.strip().lower()
+    #             if (
+    #                 hasattr(field, "selection_set")
+    #                 and type(field.selection_set) is SelectionSet
+    #                 and type(field.selection_set.selections) is list
+    #                 and len(field.selection_set.selections) > 0
+    #             ):
+    #                 fields += extract_by_recursion(
+    #                     field.selection_set.selections, path + value
+    #                 )
 
-                if hasattr(operation_definition, "name") and hasattr(
-                    operation_definition.name, "value"
-                ):
-                    result[
-                        "operation_name"
-                    ] = operation_definition.name.value.strip().lower()
+    #         return fields
 
-                if (
-                    hasattr(operation_definition, "selection_set")
-                    and type(operation_definition.selection_set) is SelectionSet
-                    and hasattr(operation_definition.selection_set, "selections")
-                    and type(operation_definition.selection_set.selections) is list
-                    and len(operation_definition.selection_set.selections) > 0
-                ):
-                    result["fields"] = flatten(
-                        operation_definition.selection_set.selections
-                    )
+    #     def flatten(selections):
+    #         output = {}
 
-                results.append(result)
+    #         for item in extract_by_recursion(selections):
+    #             if output.get(item.get("path")) is None:
+    #                 output[item.get("path")] = []
 
-        return results
+    #             if item.get("field") is not None and item.get("field") != "":
+    #                 output[item.get("path")].append(item.get("field"))
+
+    #         return output
+
+    #     results = []
+    #     ast = parse(source)
+
+    #     if (
+    #         ast
+    #         and hasattr(ast, "definitions")
+    #         and type(ast.definitions) is list
+    #         and len(ast.definitions)
+    #     ):
+    #         for operation_definition in ast.definitions:
+    #             result = {}
+
+    #             if hasattr(operation_definition, "operation"):
+    #                 result["operation"] = operation_definition.operation.strip().lower()
+
+    #             if hasattr(operation_definition, "name") and hasattr(
+    #                 operation_definition.name, "value"
+    #             ):
+    #                 result[
+    #                     "operation_name"
+    #                 ] = operation_definition.name.value.strip().lower()
+
+    #             if (
+    #                 hasattr(operation_definition, "selection_set")
+    #                 and type(operation_definition.selection_set) is SelectionSet
+    #                 and hasattr(operation_definition.selection_set, "selections")
+    #                 and type(operation_definition.selection_set.selections) is list
+    #                 and len(operation_definition.selection_set.selections) > 0
+    #             ):
+    #                 result["fields"] = flatten(
+    #                     operation_definition.selection_set.selections
+    #                 )
+
+    #             results.append(result)
+
+    #     return results
 
 
 class JSON(graphene.Scalar):
@@ -175,19 +225,19 @@ class JSON(graphene.Scalar):
     parse_value = identity
 
     @staticmethod
-    def parse_literal(ast):
-        if isinstance(ast, (StringValue, BooleanValue)):
-            return ast.value
-        elif isinstance(ast, IntValue):
-            return int(ast.value)
-        elif isinstance(ast, FloatValue):
-            return float(ast.value)
-        elif isinstance(ast, ListValue):
-            return [JSON.parse_literal(value) for value in ast.values]
-        elif isinstance(ast, ObjectValue):
+    def parse_literal(node):
+        if isinstance(node, (ast.StringValue, ast.BooleanValue)):
+            return node.value
+        elif isinstance(node, ast.IntValue):
+            return int(node.value)
+        elif isinstance(node, ast.FloatValue):
+            return float(node.value)
+        elif isinstance(node, ast.ListValue):
+            return [JSON.parse_literal(value) for value in node.values]
+        elif isinstance(node, ast.ObjectValue):
             return {
                 field.name.value: JSON.parse_literal(field.value)
-                for field in ast.fields
+                for field in node.fields
             }
         else:
             return None
