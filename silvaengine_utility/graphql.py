@@ -21,7 +21,7 @@ class Graphql(object):
             context = {
                 "logger": self.logger,
                 "setting": self.setting,
-                "endpointId": params.get("endpoint_id"),
+                "endpoint_id": params.get("endpoint_id"),
                 "connectionId": params.get("connection_id"),
             }
 
