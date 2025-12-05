@@ -152,6 +152,8 @@ class Struct(object):
             else:
                 setattr(self, a, Struct(**b) if isinstance(b, dict) else b)
 
+_JSON_HANDLER = HighPerformanceJSONHandler()
+_DATETIME_HANDLER = PendulumDateTimeHandler()
 
 class Utility(object):
     json_handler = _JSON_HANDLER
