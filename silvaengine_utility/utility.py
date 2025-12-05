@@ -198,9 +198,10 @@ class Utility(object):
         
         # Import module directly without find_spec to improve performance
         try:
-            spec = find_spec(name=module_name, package=module_name)
+            if find_spec(name=module_name, package=module_name) is None:
+                raise ModuleNotFoundError(f"Module spec for '{module_name}' not found")
         except Exception as e:
-            raise ModuleNotFoundError(f"Failed to find module spec for '{module_name}': {e}")
+            raise e
         
         try:
             module = import_module(module_name)
