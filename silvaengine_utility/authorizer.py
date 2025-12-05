@@ -66,7 +66,9 @@ class AuthPolicy(object):
             raise NameError(
                 "Invalid HTTP verb " + verb + ". Allowed verbs in HttpVerb class"
             )
+        
         resourcePattern = re.compile(self.pathRegex)
+
         if not resourcePattern.match(resource):
             raise NameError(
                 "Invalid resource path: "
@@ -78,20 +80,15 @@ class AuthPolicy(object):
         if resource[:1] == "/":
             resource = resource[1:]
 
-        resourceArn = (
-            "arn:aws:execute-api:"
-            + self.region
-            + ":"
-            + self.awsAccountId
-            + ":"
-            + self.restApiId
-            + "/"
-            + self.stage
-            + "/"
-            + verb
-            + "/"
-            + resource
-        )
+        print("========================================================")
+        print(self.region)
+        print(self.awsAccountId)
+        print(self.restApiId)
+        print(self.stage)
+        print(verb)
+        print(resource)
+
+        resourceArn = f"arn:aws:execute-api:{self.region}:{self.awsAccountId}:{self.restApiId}/{self.stage}/{verb}/{resource}"
 
         if effect.lower() == "allow":
             self.allowMethods.append(
