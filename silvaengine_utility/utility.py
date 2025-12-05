@@ -154,6 +154,8 @@ class Struct(object):
 
 
 class Utility(object):
+    json_handler = _JSON_HANDLER
+    
     @staticmethod
     def format_error(error):
         return {"message": str(error)}
