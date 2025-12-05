@@ -194,17 +194,21 @@ class Authorizer(object):
         super().__init__()
 
         if event:
-            arn, request_context = (
-                event.get("methodArn", ""),
-                event.get("requestContext", {}),
-            )
+            request_context = event.get("requestContext", {})
             self.policy = AuthPolicy(event.get("path"), request_context.get("accountId"))
             self.policy.restApiId = request_context.get("apiId"),
             self.policy.stage = request_context.get("stage")
-            parts = arn.split(":")
+            arn_parts = event.get("methodArn", "").split(":")
 
-            if parts and len(parts) > 3:
-                self.policy.region = parts[3]
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            print(arn_parts)
+            print(arn_parts and len(arn_parts) > 3)
+            print(arn_parts[3])
+
+
+
+            if arn_parts and len(arn_parts) > 3:
+                self.policy.region = arn_parts[3]
 
     def authorize(self, is_allow=True, context=None):
         # policy.allowAllMethods()
