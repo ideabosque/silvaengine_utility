@@ -186,7 +186,7 @@ class Utility(object):
         """
         # Validate required parameters
         if not module_name or not function_name:
-            return None
+            raise ValueError("module_name and function_name are required")
         
         # Clean and validate parameters
         try:
@@ -197,6 +197,11 @@ class Utility(object):
             raise TypeError(f"Invalid parameter type: {e}")
         
         # Import module directly without find_spec to improve performance
+        try:
+            spec = find_spec(name=module_name, package=module_name)
+        except Exception as e:
+            raise ModuleNotFoundError(f"Failed to find module spec for '{module_name}': {e}")
+        
         try:
             module = import_module(module_name)
         except Exception as e:
