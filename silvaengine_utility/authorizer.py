@@ -5,6 +5,7 @@ from __future__ import print_function
 __author__ = "bl"
 
 import re
+from typing import Any, Dict, Tuple
 
 
 class HttpVerb:
@@ -189,13 +190,21 @@ class AuthPolicy(object):
 
 
 class Authorizer(object):
-    def __init__(self, principal, aws_account_id, api_id, region, stage) -> None:
+    def __init__(self, event: Dict[str, Any]) -> None:
         super().__init__()
 
-        self.policy = AuthPolicy(principal, aws_account_id)
-        self.policy.restApiId = api_id
-        self.policy.region = region
-        self.policy.stage = stage
+        if event:
+            arn, request_context = (
+                event.get("methodArn", ""),
+                event.get("requestContext", {}),
+            )
+            self.policy = AuthPolicy(event.get("path"), request_context.get("accountId"))
+            self.policy.restApiId = request_context.get("apiId"),
+            self.policy.stage = request_context.get("stage")
+            parts = arn.split(":")
+
+            if parts and len(parts) > 3:
+                self.policy.region = parts[3]
 
     def authorize(self, is_allow=True, context=None):
         # policy.allowAllMethods()
