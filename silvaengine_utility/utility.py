@@ -200,20 +200,16 @@ class Utility(object):
         try:
             if find_spec(name=module_name, package=module_name) is None:
                 raise ModuleNotFoundError(f"Module spec for '{module_name}' not found")
+            
+            agent = import_module(module_name)
         except Exception as e:
             raise e
         
-        try:
-            module = import_module(module_name)
-        except Exception as e:
-            raise ImportError(f"Failed to import module '{module_name}': {e}")
-        
         # Handle class instantiation if specified
-        target_obj = module
         if class_name:
             # Get class from module
             try:
-                cls = getattr(module, class_name)
+                cls = getattr(agent, class_name)
             except AttributeError as e:
                 raise AttributeError(f"Class '{class_name}' not found in module '{module_name}': {e}")
             
@@ -221,18 +217,18 @@ class Utility(object):
             if constructor_parameters is not None:
                 if not isinstance(constructor_parameters, dict):
                     raise TypeError("constructor_parameters must be a dictionary")
-                target_obj = cls(**constructor_parameters)
+                agent = cls(**constructor_parameters)
             else:
                 # Check if method is static before deciding how to get it
                 try:
                     method = getattr(cls, function_name)
                     if Utility.is_static_method(method):
                         # For static methods, we can use the class itself
-                        target_obj = cls
+                        agent = cls
                     else:
                         # For instance methods, we need to instantiate the class
                         try:
-                            target_obj = cls()
+                            agent = cls()
                         except Exception as e:
                             raise TypeError(f"Failed to instantiate class '{class_name}': {e}")
                 except AttributeError as e:
@@ -240,7 +236,7 @@ class Utility(object):
         
         # Get the requested function/method
         try:
-            return getattr(target_obj, function_name)
+            return getattr(agent, function_name)
         except AttributeError as e:
             raise AttributeError(f"Function '{function_name}' not found in target object: {e}")
 
