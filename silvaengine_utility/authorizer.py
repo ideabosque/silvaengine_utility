@@ -80,14 +80,6 @@ class AuthPolicy(object):
         if resource[:1] == "/":
             resource = resource[1:]
 
-        print("========================================================")
-        print(self.region)
-        print(self.awsAccountId)
-        print(self.restApiId)
-        print(self.stage)
-        print(verb)
-        print(resource)
-
         resourceArn = f"arn:aws:execute-api:{self.region}:{self.awsAccountId}:{self.restApiId}/{self.stage}/{verb}/{resource}"
 
         if effect.lower() == "allow":
@@ -193,13 +185,9 @@ class Authorizer(object):
         if event:
             request_context = event.get("requestContext", {})
             self.policy = AuthPolicy(event.get("path",""), request_context.get("accountId",""))
-            self.policy.restApiId = request_context.get("apiId",""),
+            self.policy.restApiId = request_context.get("apiId","")
             self.policy.stage = request_context.get("stage","")
             arn_parts = event.get("methodArn", "").split(":")
-
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            print(self.policy.restApiId, request_context.get("apiId",""))
-            print(self.policy.stage, request_context.get("stage",""))
 
             if arn_parts and len(arn_parts) > 3:
                 self.policy.region = arn_parts[3]
