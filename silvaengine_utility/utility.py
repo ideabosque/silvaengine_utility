@@ -13,7 +13,7 @@ from decimal import Decimal
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
-
+from .json_handler import HighPerformanceJSONHandler
 import dateutil
 from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -153,7 +153,6 @@ class Struct(object):
                 setattr(self, a, Struct(**b) if isinstance(b, dict) else b)
 
 _JSON_HANDLER = HighPerformanceJSONHandler()
-_DATETIME_HANDLER = PendulumDateTimeHandler()
 
 class Utility(object):
     json_handler = _JSON_HANDLER
