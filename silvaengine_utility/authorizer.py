@@ -200,14 +200,13 @@ class Authorizer(object):
             self.policy.stage = request_context.get("stage")
             arn_parts = event.get("methodArn", "").split(":")
 
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            print(arn_parts)
-            print(arn_parts and len(arn_parts) > 3)
-            print(arn_parts[3])
-            print(type(arn_parts[3]))
-
             if arn_parts and len(arn_parts) > 3:
                 self.policy.region = arn_parts[3]
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                print(arn_parts)
+                print(arn_parts and len(arn_parts) > 3)
+                print(self.policy.region)
+                print(type(self.policy.region))
 
     def authorize(self, is_allow=True, context=None):
         # policy.allowAllMethods()
