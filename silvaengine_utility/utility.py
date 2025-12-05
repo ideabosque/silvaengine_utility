@@ -200,7 +200,7 @@ class Utility(object):
         # Import module directly without find_spec to improve performance
         try:
             module = import_module(module_name)
-        except ImportError as e:
+        except Exception as e:
             raise ImportError(f"Failed to import module '{module_name}': {e}")
         
         # Handle class instantiation if specified

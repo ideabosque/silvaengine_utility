@@ -193,7 +193,6 @@ class Authorizer(object):
                 self.policy.region = arn_parts[3]
 
     def authorize(self, is_allow=True, context=None):
-        # policy.allowAllMethods()
         getattr(self.policy, "allowAllMethods" if is_allow else "denyAllMethods")()
 
         # Finally, build the policy
