@@ -32,9 +32,6 @@ class Graphql(object):
 
             if not query:
                 return self._error_response("Invalid operations.")
-            
-            self.logger.info(f"Graphql query: {query}")
-            self.logger.info(f"Graphql variables: {params}")
 
             execution_result = schema.execute(
                 query,
