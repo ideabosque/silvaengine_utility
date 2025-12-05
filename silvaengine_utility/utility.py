@@ -159,25 +159,52 @@ class Utility(object):
         return {"message": str(error)}
 
     @staticmethod
-    def json_dumps(data):
-        return json.dumps(
-            data,
-            indent=2,
-            sort_keys=True,
-            separators=(",", ": "),
-            cls=JSONEncoder,
-            ensure_ascii=False,
-        )
-        # return jsonpickle.encode(data, unpicklable=False)
+    def json_dumps(data, **kwargs):
+        # Use consistent formatting with original jsonencode behavior
+        defaults = {
+            "compact": False,
+            "indent": 2,
+            "sort_keys": True,
+            "separators": (",", ": "),
+        }
+        defaults.update(kwargs)
+        return Utility.json_handler.dumps(data, **defaults)
 
     @staticmethod
-    def json_loads(data, parser_number=True):
-        if parser_number:
-            return json.loads(
-                data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal
-            )
-        return json.loads(data, cls=JSONDecoder)
-        # return jsonpickle.decode(data)
+    def json_loads(data, parser_number=True, parse_datetime=True, **kwargs):
+        return Utility.json_handler.loads(
+            data, parser_number=parser_number, parse_datetime=parse_datetime, **kwargs
+        )
+
+    @staticmethod
+    def json_normalize(data, parser_number=True, parse_datetime=True):
+        """
+        Normalize data types as if going through JSON serialization/deserialization.
+
+        This function simulates json_loads(json_dumps(obj)) without the overhead of
+        actual JSON string creation and parsing.
+
+        Args:
+            data: Object to normalize
+            parser_number: Whether to convert numbers to Decimal after float conversion (default: True)
+            parse_datetime: Whether to parse ISO datetime strings back to datetime objects (default: True)
+
+        Returns:
+            Normalized object with types as if processed through json_loads(json_dumps(obj))
+
+        Examples:
+            # Normalize mixed data types
+            data = {
+                "amount": Decimal("100.50"),
+                "created_at": datetime.now(),
+                "items": [Decimal("10"), Decimal("20.5")]
+            }
+            normalized = Utility.json_normalize(data)
+            # Result: Decimal -> float -> Decimal, datetime -> ISO string -> datetime
+        """
+        return Utility.json_handler.json_normalize(
+            data, parser_number=parser_number, parse_datetime=parse_datetime
+        )
 
     # Check the specified ip exists in the given ip segment
     @staticmethod
