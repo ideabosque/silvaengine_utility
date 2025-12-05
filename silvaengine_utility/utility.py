@@ -14,7 +14,6 @@ from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
 from .json_handler import HighPerformanceJSONHandler
-import dateutil
 from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
 
