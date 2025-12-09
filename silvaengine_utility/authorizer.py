@@ -49,6 +49,10 @@ class AuthPolicy:
             principal_id: The principal user identification associated with the token
             aws_account_id: The AWS account ID of the API owner
         """
+        self.awsAccountId = aws_account_id
+        self.principalId = principal_id
+        self.allowMethods = []
+        self.denyMethods = []
 
     def _addMethod(self, effect, verb, resource, conditions):
         """Adds a method to the internal lists of allowed or denied methods. Each object in
