@@ -4,6 +4,14 @@ from __future__ import print_function
 
 __author__ = "bl"
 
+try:
+    from graphql.error import GraphQLError, format_error as format_graphql_error
+except ImportError:  # pragma: no cover - graphql-core>=3.2 removed format_error
+    from graphql import GraphQLError
+
+    def format_graphql_error(error):
+        return getattr(error, "formatted", {"message": str(error)})
+
 from .utility import Utility
 
 
