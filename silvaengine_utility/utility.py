@@ -24,9 +24,6 @@ except ImportError:  # pragma: no cover - graphql-core>=3.2 removed format_error
     def format_graphql_error(error):
         return getattr(error, "formatted", {"message": str(error)})
 
-
-from sqlalchemy import create_engine, orm
-
 from .datetime_handler import PendulumDateTimeHandler
 from .json_handler import HighPerformanceJSONHandler
 from .performance_monitor import performance_monitor
