@@ -1,16 +1,14 @@
-#!/usr/bin/env python3
-"""AWS API Gateway Lambda Authorizer utility classes."""
-
-import re
-from enum import Enum
-from typing import Any, Dict, List, Optional
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+from __future__ import print_function
 
 __author__ = "bl"
 
+import re
+from typing import Any, Dict, Tuple
 
-class HttpVerb(Enum):
-    """Supported HTTP verbs for API Gateway methods."""
 
+class HttpVerb:
     GET = "GET"
     POST = "POST"
     PUT = "PUT"
@@ -68,7 +66,9 @@ class AuthPolicy(object):
             raise NameError(
                 "Invalid HTTP verb " + verb + ". Allowed verbs in HttpVerb class"
             )
+        
         resourcePattern = re.compile(self.pathRegex)
+
         if not resourcePattern.match(resource):
             raise NameError(
                 "Invalid resource path: "
@@ -80,20 +80,7 @@ class AuthPolicy(object):
         if resource[:1] == "/":
             resource = resource[1:]
 
-        resourceArn = (
-            "arn:aws:execute-api:"
-            + self.region
-            + ":"
-            + self.awsAccountId
-            + ":"
-            + self.restApiId
-            + "/"
-            + self.stage
-            + "/"
-            + verb
-            + "/"
-            + resource
-        )
+        resourceArn = f"arn:aws:execute-api:{self.region}:{self.awsAccountId}:{self.restApiId}/{self.stage}/{verb}/{resource}"
 
         if effect.lower() == "allow":
             self.allowMethods.append(
@@ -206,24 +193,12 @@ class Authorizer(object):
                 self.policy.region = arn_parts[3]
 
     def authorize(self, is_allow=True, context=None):
-        """
-        Args:
-            is_allow: If True, allow all methods; if False, deny all methods
-            context: Optional context to include in the response
-
-        Returns:
-            Authorization response dictionary
-        """
         getattr(self.policy, "allowAllMethods" if is_allow else "denyAllMethods")()
 
-        if is_allow:
-            self.policy.allow_all_methods()
-        else:
-            self.policy.deny_all_methods()
-
-        auth_response = self.policy.build()
+        # Finally, build the policy
+        authResponse = self.policy.build()
 
         if context:
-            auth_response["context"] = context
+            authResponse["context"] = context
 
-        return auth_response
+        return authResponse
