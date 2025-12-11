@@ -347,7 +347,8 @@ class Utility(object):
     def to_snake_case(s: str) -> str:
         if not s:
             return s
-        
+
+        s = str(s).strip()
         result = []
         length = len(s)
         
