@@ -343,32 +343,57 @@ class Utility(object):
             ]
         ).lower()
     
+        # Add a cache for snake case conversions to avoid repeated calculations
+    
+    
+    _snake_case_cache = {}
+    
     @staticmethod
     def to_snake_case(s: str) -> str:
+        """Convert string to snake_case format with caching for improved performance."""
         if not s:
             return s
-
-        s = str(s).strip()
-        result = []
-        length = len(s)
         
-        for i, ch in enumerate(s):
+        # Check cache first
+        cache_key = str(s)
+        if cache_key in Utility._snake_case_cache:
+            return Utility._snake_case_cache[cache_key]
+        
+        s = cache_key.strip()
+        length = len(s)
+        result = []
+        prev_char = None
+        
+        for i in range(length):
+            ch = s[i]
+            next_char = s[i+1] if i < length - 1 else None
+            
             if ch == '-' or ch == '_':
-                result.append('_')
+                # Only add underscore if not at start or after another underscore
+                if not (i == 0 or prev_char == '_'):
+                    result.append('_')
+                prev_char = '_'
             elif ch.isupper():
-                # 处理连续大写字母
-                if i > 0 and s[i-1].islower():
+                # Convert to lowercase
+                lower_ch = ch.lower()
+                
+                # Add underscore before uppercase if:
+                # 1. Previous character is lowercase
+                # 2. Previous character is uppercase and next character is lowercase
+                if i > 0 and ((prev_char and prev_char.islower()) or 
+                              (prev_char and prev_char.isupper() and next_char and next_char.islower())):
                     result.append('_')
-                    result.append(ch.lower())
-                elif i > 0 and s[i-1].isupper() and i < length - 1 and s[i+1].islower():
-                    result.append('_')
-                    result.append(ch.lower())
-                else:
-                    result.append(ch.lower())
+                
+                result.append(lower_ch)
+                prev_char = lower_ch
             else:
                 result.append(ch)
+                prev_char = ch
         
-        return ''.join(result)
+        # Join and cache the result
+        snake_case = ''.join(result)
+        Utility._snake_case_cache[cache_key] = snake_case
+        return snake_case
 
     @staticmethod
     def is_json_string(string):
