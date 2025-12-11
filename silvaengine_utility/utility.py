@@ -342,6 +342,32 @@ class Utility(object):
                 for index, char in enumerate(text)
             ]
         ).lower()
+    
+    @staticmethod
+    def to_snake_case(s: str) -> str:
+        if not s:
+            return s
+        
+        result = []
+        length = len(s)
+        
+        for i, ch in enumerate(s):
+            if ch == '-' or ch == '_':
+                result.append('_')
+            elif ch.isupper():
+                # 处理连续大写字母
+                if i > 0 and s[i-1].islower():
+                    result.append('_')
+                    result.append(ch.lower())
+                elif i > 0 and s[i-1].isupper() and i < length - 1 and s[i+1].islower():
+                    result.append('_')
+                    result.append(ch.lower())
+                else:
+                    result.append(ch.lower())
+            else:
+                result.append(ch)
+        
+        return ''.join(result)
 
     @staticmethod
     def is_json_string(string):
