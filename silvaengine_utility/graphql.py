@@ -22,8 +22,11 @@ class Graphql(object):
                 "logger": self.logger,
                 "setting": self.setting,
                 "endpoint_id": params.get("store_id"),
-                "connectionId": params.get("connection_id"),
+                "connection_id": params.get("connection_id"),
             }
+
+            if params.get("custom_headers"):
+                context = dict(context, **params["custom_headers"])
 
             if params.get("context"):
                 context = dict(context, **params["context"])
