@@ -11,9 +11,11 @@ import warnings
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
-from .json_handler import HighPerformanceJSONHandler
+
 from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
+
+from .json_handler import HighPerformanceJSONHandler
 
 try:
     from graphql.error import GraphQLError
@@ -23,6 +25,7 @@ except ImportError:  # pragma: no cover - graphql-core>=3.2 removed format_error
 
     def format_graphql_error(error):
         return getattr(error, "formatted", {"message": str(error)})
+
 
 from .datetime_handler import PendulumDateTimeHandler
 from .json_handler import HighPerformanceJSONHandler
@@ -82,7 +85,9 @@ class Struct(object):
             else:
                 setattr(self, a, Struct(**b) if isinstance(b, dict) else b)
 
+
 _JSON_HANDLER = HighPerformanceJSONHandler()
+
 
 class Utility(object):
     json_handler = _JSON_HANDLER
@@ -195,20 +200,20 @@ class Utility(object):
     ):
         """
         Dynamically imports a module and retrieves a function or method.
-        
+
         This method loads a module dynamically, optionally instantiates a class from that module,
         and returns a callable function or method.
-        
+
         Args:
             module_name (str): The name of the module to import.
             function_name (str): The name of the function/method to retrieve.
             class_name (str, optional): The name of the class containing the method. Defaults to None.
             constructor_parameters (dict, optional): Parameters to pass to the class constructor.
                 Defaults to None.
-        
+
         Returns:
             callable or None: The requested function/method if found and accessible, otherwise None.
-        
+
         Raises:
             TypeError: If parameters are of incorrect types.
             ImportError: If the module cannot be imported.
@@ -217,7 +222,7 @@ class Utility(object):
         # Validate required parameters
         if not module_name or not function_name:
             raise ValueError("module_name and function_name are required")
-        
+
         # Clean and validate parameters
         try:
             module_name = str(module_name).strip()
@@ -225,24 +230,26 @@ class Utility(object):
             class_name = str(class_name).strip() if class_name else None
         except (TypeError, ValueError) as e:
             raise TypeError(f"Invalid parameter type: {e}")
-        
+
         # Import module directly without find_spec to improve performance
         try:
             if find_spec(name=module_name, package=module_name) is None:
                 raise ModuleNotFoundError(f"Module spec for '{module_name}' not found")
-            
+
             agent = import_module(module_name)
         except Exception as e:
             raise e
-        
+
         # Handle class instantiation if specified
         if class_name:
             # Get class from module
             try:
                 cls = getattr(agent, class_name)
             except AttributeError as e:
-                raise AttributeError(f"Class '{class_name}' not found in module '{module_name}': {e}")
-            
+                raise AttributeError(
+                    f"Class '{class_name}' not found in module '{module_name}': {e}"
+                )
+
             # Instantiate class or use class itself for static methods
             if constructor_parameters is not None:
                 if not isinstance(constructor_parameters, dict):
@@ -260,15 +267,21 @@ class Utility(object):
                         try:
                             agent = cls()
                         except Exception as e:
-                            raise TypeError(f"Failed to instantiate class '{class_name}': {e}")
+                            raise TypeError(
+                                f"Failed to instantiate class '{class_name}': {e}"
+                            )
                 except AttributeError as e:
-                    raise AttributeError(f"Method '{function_name}' not found in class '{class_name}': {e}")
-        
+                    raise AttributeError(
+                        f"Method '{function_name}' not found in class '{class_name}': {e}"
+                    )
+
         # Get the requested function/method
         try:
             return getattr(agent, function_name)
         except AttributeError as e:
-            raise AttributeError(f"Function '{function_name}' not found in target object: {e}")
+            raise AttributeError(
+                f"Function '{function_name}' not found in target object: {e}"
+            )
 
     # Call function by async
     @staticmethod
@@ -342,56 +355,62 @@ class Utility(object):
                 for index, char in enumerate(text)
             ]
         ).lower()
-    
+
         # Add a cache for snake case conversions to avoid repeated calculations
-    
-    
+
     _snake_case_cache = {}
-    
+
     @staticmethod
     def to_snake_case(s: str) -> str:
         """Convert string to snake_case format with caching for improved performance."""
         if not s:
             return s
-        
+
         # Check cache first
         cache_key = str(s)
         if cache_key in Utility._snake_case_cache:
             return Utility._snake_case_cache[cache_key]
-        
+
         s = cache_key.strip()
         length = len(s)
         result = []
         prev_char = None
-        
+
         for i in range(length):
             ch = s[i]
-            next_char = s[i+1] if i < length - 1 else None
-            
-            if ch == '-' or ch == '_':
+            next_char = s[i + 1] if i < length - 1 else None
+
+            if ch == "-" or ch == "_":
                 # Only add underscore if not at start or after another underscore
-                if not (i == 0 or prev_char == '_'):
-                    result.append('_')
-                prev_char = '_'
+                if not (i == 0 or prev_char == "_"):
+                    result.append("_")
+                prev_char = "_"
             elif ch.isupper():
                 # Convert to lowercase
                 lower_ch = ch.lower()
-                
+
                 # Add underscore before uppercase if:
                 # 1. Previous character is lowercase
                 # 2. Previous character is uppercase and next character is lowercase
-                if i > 0 and ((prev_char and prev_char.islower()) or 
-                              (prev_char and prev_char.isupper() and next_char and next_char.islower())):
-                    result.append('_')
-                
+                if i > 0 and (
+                    (prev_char and prev_char.islower())
+                    or (
+                        prev_char
+                        and prev_char.isupper()
+                        and next_char
+                        and next_char.islower()
+                    )
+                ):
+                    result.append("_")
+
                 result.append(lower_ch)
                 prev_char = lower_ch
             else:
                 result.append(ch)
                 prev_char = ch
-        
+
         # Join and cache the result
-        snake_case = ''.join(result)
+        snake_case = "".join(result)
         Utility._snake_case_cache[cache_key] = snake_case
         return snake_case
 
@@ -488,11 +507,14 @@ class Utility(object):
             if result is None:
                 return
 
-            result = Utility.json_loads(result)
-            if result.get("errors"):
-                raise Exception(result["errors"])
+            result = Utility.json_loads(result["body"])
+            # if "errors" in result:
+            #     raise Exception(result["errors"])
 
-            return result["data"]
+            # if "data" in result:
+            #     return result["data"]
+
+            return result
         except Exception as e:
             log = traceback.format_exc()
             logger.error(log)
