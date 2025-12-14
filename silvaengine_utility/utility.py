@@ -11,6 +11,7 @@ import warnings
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
+from typing import Any, Dict
 
 from sqlalchemy import create_engine, orm
 from sqlalchemy.ext.declarative import DeclarativeMeta
@@ -452,6 +453,7 @@ class Utility(object):
         invocation_type = kwargs.get("invocation_type", "RequestResponse")
         payload = {
             "endpoint_id": kwargs["endpoint_id"],
+            "part_id": kwargs["part_id"],
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
@@ -477,6 +479,10 @@ class Utility(object):
                 MessageAttributes={
                     "endpoint_id": {
                         "StringValue": kwargs["endpoint_id"],
+                        "DataType": "String",
+                    },
+                    "part_id": {
+                        "StringValue": kwargs["part_id"],
                         "DataType": "String",
                     },
                     "funct": {"StringValue": kwargs["funct"], "DataType": "String"},
@@ -508,11 +514,6 @@ class Utility(object):
                 return
 
             result = Utility.json_loads(result["body"])
-            # if "errors" in result:
-            #     raise Exception(result["errors"])
-
-            # if "data" in result:
-            #     return result["data"]
 
             return result
         except Exception as e:
@@ -522,40 +523,26 @@ class Utility(object):
 
     @staticmethod
     def invoke_funct_on_aws_lambda(
-        logger,
-        endpoint_id,
+        context: Dict[str, Any],
         funct: str,
         params={},
-        setting=None,
-        test_mode=None,
-        execute_mode=None,
         aws_lambda=None,
         invocation_type="RequestResponse",
         message_group_id=None,
         task_queue=None,
     ):
-        effective_mode = execute_mode
-        if test_mode is not None:
-            if effective_mode is None:
-                warnings.warn(
-                    "test_mode is deprecated. Use execute_mode instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                effective_mode = test_mode
-            elif test_mode != execute_mode:
-                warnings.warn(
-                    "test_mode is ignored because execute_mode is provided.",
-                    UserWarning,
-                    stacklevel=2,
-                )
+        logger = context.get("logger")
+        endpoint_id = context.get("endpoint_id")
+        part_id = context.get("part_id")
+        setting = context.get("setting", {})
+        execute_mode = setting.get("execute_mode")
 
-        if effective_mode:
-            if effective_mode == "local_for_all":
+        if execute_mode:
+            if execute_mode == "local_for_all":
                 return Utility.invoke_funct_on_local(logger, setting, funct, **params)
-            if effective_mode == "local_for_sqs" and not message_group_id:
+            if execute_mode == "local_for_sqs" and not message_group_id:
                 return Utility.invoke_funct_on_local(logger, setting, funct, **params)
-            if effective_mode == "local_for_aws_lambda" and task_queue is None:
+            if execute_mode == "local_for_aws_lambda" and task_queue is None:
                 pass
 
         if message_group_id and task_queue:
@@ -565,6 +552,7 @@ class Utility(object):
                 message_group_id,
                 **{
                     "endpoint_id": endpoint_id,
+                    "part_id": part_id,
                     "funct": funct,
                     "params": params,
                 },
@@ -577,6 +565,7 @@ class Utility(object):
             **{
                 "invocation_type": invocation_type,
                 "endpoint_id": endpoint_id,
+                "part_id": part_id,
                 "funct": funct,
                 "params": params,
             },
@@ -604,15 +593,11 @@ class Utility(object):
 
     @staticmethod
     def execute_graphql_query(
-        logger,
-        endpoint_id,
+        context,
         funct,
         query,
         variables={},
-        setting=None,
         connection_id=None,
-        test_mode=None,
-        execute_mode=None,
         aws_lambda=None,
     ):
         params = {
@@ -621,13 +606,9 @@ class Utility(object):
             "connection_id": connection_id,
         }
         result = Utility.invoke_funct_on_aws_lambda(
-            logger,
-            endpoint_id,
+            context,
             funct,
             params=params,
-            setting=setting,
-            test_mode=test_mode,
-            execute_mode=execute_mode,
             aws_lambda=aws_lambda,
         )
 
@@ -636,22 +617,14 @@ class Utility(object):
 
     @staticmethod
     def fetch_graphql_schema(
-        logger,
-        endpoint_id,
+        context,
         funct,
-        setting=None,
-        test_mode=None,
-        execute_mode=None,
         aws_lambda=None,
     ):
         schema = Utility.execute_graphql_query(
-            logger,
-            endpoint_id,
+            context,
             funct,
             query=INTROSPECTION_QUERY,
-            setting=setting,
-            test_mode=test_mode,
-            execute_mode=execute_mode,
             aws_lambda=aws_lambda,
         )["__schema"]
         return schema
