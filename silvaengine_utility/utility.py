@@ -597,13 +597,12 @@ class Utility(object):
         funct,
         query,
         variables={},
-        connection_id=None,
         aws_lambda=None,
     ):
         params = {
             "query": query,
             "variables": variables,
-            "connection_id": connection_id,
+            "connection_id": context.get("connection_id"),
         }
         result = Utility.invoke_funct_on_aws_lambda(
             context,
