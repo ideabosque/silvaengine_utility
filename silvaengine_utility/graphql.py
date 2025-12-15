@@ -8,6 +8,8 @@ import graphene
 from graphql import parse
 from graphql.language import ast
 from .utility import Utility
+from .invoker import Invoker
+from .serializer import Serializer
 
 INTROSPECTION_QUERY = """
 query IntrospectionQuery {
@@ -111,7 +113,7 @@ class Graphql(object):
                 "Access-Control-Allow-Origin": "*",
                 "Content-Type": "application/json",
             },
-            "body": Utility.json_dumps(data),
+            "body": Serializer.json_dumps(data),
         }
     
     @staticmethod
@@ -127,7 +129,7 @@ class Graphql(object):
             "variables": variables,
             "connection_id": context.get("connection_id"),
         }
-        result = Utility.invoke_funct_on_aws_lambda(
+        result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,
             params=params,
@@ -135,7 +137,7 @@ class Graphql(object):
         )
 
         # Normalize GraphQL response to ensure consistent structure
-        return Utility.normalize_graphql_response(result)
+        return Graphql.normalize_graphql_response(result)
 
     @staticmethod
     def fetch_graphql_schema(
@@ -143,7 +145,7 @@ class Graphql(object):
         funct,
         aws_lambda=None,
     ):
-        schema = Utility.execute_graphql_query(
+        schema = Graphql.execute_graphql_query(
             context,
             funct,
             query=INTROSPECTION_QUERY,
@@ -169,7 +171,7 @@ class Graphql(object):
     @staticmethod
     def generate_field_subselection(schema, type_name):
         try:
-            fields = Utility.extract_available_fields(schema, type_name)
+            fields = Graphql.extract_available_fields(schema, type_name)
             subselection = []
             for field in fields:
                 if field["kind"] in ["OBJECT", "LIST"]:
@@ -181,7 +183,7 @@ class Graphql(object):
                         "JSON",
                     ]:
                         # Recursively generate subselection for nested objects
-                        nested_fields = Utility.generate_field_subselection(
+                        nested_fields = Graphql.generate_field_subselection(
                             schema, field["type"]
                         )
                         subselection.append(f"{field['name']} {{ {nested_fields} }}")
@@ -265,7 +267,7 @@ class Graphql(object):
         if return_type["kind"] == "NON_NULL":
             return_type = return_type["ofType"]
         field_string = (
-            Utility.generate_field_subselection(schema, return_type["name"])
+            Graphql.generate_field_subselection(schema, return_type["name"])
             if return_type["kind"] == "OBJECT"
             else ""
         )
