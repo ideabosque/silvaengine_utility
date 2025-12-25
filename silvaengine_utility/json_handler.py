@@ -255,7 +255,7 @@ class HighPerformanceJSONHandler:
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
             result = json.loads(
-                data, cls=JSONDecoder, parse_float=Decimal, parse_int=Decimal, **kwargs
+                data, cls=JSONDecoder, parse_float=Decimal, parse_int=int, **kwargs
             )
         else:
             # Use orjson for faster parsing without number conversion, fallback to standard json

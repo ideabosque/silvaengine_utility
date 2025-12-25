@@ -4,6 +4,12 @@ from __future__ import print_function
 
 __author__ = "bl"
 
+import functools
+import os
+import queue
+import threading
+import time
+import uuid
 import graphene
 from graphql import parse
 from graphql.language import ast
@@ -50,8 +56,259 @@ query IntrospectionQuery {
     }
 }"""
 
+
+class QueueManager:
+    """
+    Thread-safe queue manager for temporary storage of settings data.
+    
+    This manager provides a centralized queue for storing settings information
+    that can be consumed by BaseModel subclasses. It ensures thread safety and
+    proper lifecycle management of the temporary storage.
+    
+    Attributes:
+        _instance: Singleton instance of the queue manager
+        _lock: Thread lock for singleton pattern
+        _queue: Thread-safe queue for storing settings
+        _queue_lock: Lock for queue operations
+        _max_size: Maximum queue size
+        _retention_ttl: Time-to-live for items in the queue (seconds)
+        _metadata: Dictionary storing item metadata with timestamps
+        _metadata_lock: Lock for metadata operations
+        _enabled: Flag to enable/disable queue operations
+        _cleanup_interval: Interval for cleanup operations (seconds)
+        _last_cleanup: Timestamp of last cleanup
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(QueueManager, cls).__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        self._queue = queue.Queue(maxsize=1000)
+        self._queue_lock = threading.RLock()
+        self._max_size = 1000
+        self._retention_ttl = int(os.getenv("SETTINGS_QUEUE_TTL", "3600"))
+        self._metadata = {}
+        self._metadata_lock = threading.RLock()
+        self._enabled = os.getenv("ENVIRONMENT", "development") == "production"
+        self._cleanup_interval = int(os.getenv("SETTINGS_QUEUE_CLEANUP_INTERVAL", "300"))
+        self._last_cleanup = time.time()
+        self._initialized = True
+    
+    def is_enabled(self):
+        """Check if queue operations are enabled."""
+        return self._enabled
+    
+    def enqueue(self, settings_data, logger=None):
+        """
+        Enqueue settings data with metadata.
+        
+        Args:
+            settings_data: Dictionary containing settings information
+            logger: Logger instance for logging operations
+            
+        Returns:
+            str: Unique identifier for the enqueued item
+        """
+        if not self._enabled:
+            return None
+        
+        item_id = str(uuid.uuid4())
+        timestamp = time.time()
+        
+        with self._queue_lock:
+            try:
+                if self._queue.full():
+                    self._cleanup_expired_items(logger)
+                
+                queue_item = {
+                    "id": item_id,
+                    "data": settings_data,
+                    "timestamp": timestamp,
+                }
+                self._queue.put_nowait(queue_item)
+                
+                with self._metadata_lock:
+                    self._metadata[item_id] = {
+                        "timestamp": timestamp,
+                        "consumed": False,
+                    }
+                
+                if logger:
+                    logger.info(
+                        f"Settings enqueued: id={item_id}, "
+                        f"timestamp={timestamp}, queue_size={self._queue.qsize()}"
+                    )
+                
+                return item_id
+            except queue.Full:
+                if logger:
+                    logger.error(
+                        f"Failed to enqueue settings: queue is full (size={self._queue.qsize()})"
+                    )
+                return None
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to enqueue settings: {str(e)}")
+                return None
+    
+    def dequeue(self, logger=None):
+        """
+        Dequeue settings data.
+        
+        Args:
+            logger: Logger instance for logging operations
+            
+        Returns:
+            dict: Dequeued settings data or None if queue is empty
+        """
+        if not self._enabled:
+            return None
+        
+        with self._queue_lock:
+            try:
+                item = self._queue.get_nowait()
+                
+                with self._metadata_lock:
+                    if item["id"] in self._metadata:
+                        self._metadata[item["id"]]["consumed"] = True
+                
+                if logger:
+                    logger.info(
+                        f"Settings dequeued: id={item['id']}, "
+                        f"timestamp={item['timestamp']}, queue_size={self._queue.qsize()}"
+                    )
+                
+                return item
+            except queue.Empty:
+                return None
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to dequeue settings: {str(e)}")
+                return None
+    
+    def _cleanup_expired_items(self, logger=None):
+        """
+        Remove expired items from the queue and metadata.
+        
+        Args:
+            logger: Logger instance for logging operations
+        """
+        current_time = time.time()
+        expired_count = 0
+        
+        with self._metadata_lock:
+            expired_ids = [
+                item_id
+                for item_id, meta in self._metadata.items()
+                if current_time - meta["timestamp"] > self._retention_ttl
+            ]
+            
+            for item_id in expired_ids:
+                del self._metadata[item_id]
+                expired_count += 1
+        
+        if expired_count > 0 and logger:
+            logger.info(f"Cleaned up {expired_count} expired items from metadata")
+        
+        self._last_cleanup = current_time
+    
+    def get_queue_size(self):
+        """Get current queue size."""
+        with self._queue_lock:
+            return self._queue.qsize()
+    
+    def get_metadata_stats(self):
+        """
+        Get metadata statistics.
+        
+        Returns:
+            dict: Statistics about the queue metadata
+        """
+        with self._metadata_lock:
+            total_items = len(self._metadata)
+            consumed_items = sum(
+                1 for meta in self._metadata.values() if meta["consumed"]
+            )
+            pending_items = total_items - consumed_items
+            
+            return {
+                "total_items": total_items,
+                "consumed_items": consumed_items,
+                "pending_items": pending_items,
+                "queue_size": self.get_queue_size(),
+                "retention_ttl": self._retention_ttl,
+            }
+    
+    def clear(self, logger=None):
+        """
+        Clear all items from the queue and metadata.
+        
+        Args:
+            logger: Logger instance for logging operations
+        """
+        with self._queue_lock:
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except queue.Empty:
+                    break
+        
+        with self._metadata_lock:
+            cleared_count = len(self._metadata)
+            self._metadata.clear()
+        
+        if logger:
+            logger.info(f"Cleared {cleared_count} items from queue and metadata")
+
+
+def graphql_service_initialization(original_function):
+    """
+    Decorator to intercept Graphql class initialization and queue settings data.
+    
+    This decorator intercepts the __init__ method of the Graphql class and
+    enqueues the settings data for consumption by BaseModel subclasses.
+    The queue operations are only enabled in production environment.
+    
+    Args:
+        original_function: The __init__ method to decorate
+        
+    Returns:
+        callable: Wrapped function that enqueues settings data
+        
+    Usage:
+        @settings_queue_producer
+        def __init__(self, logger, **setting):
+            self.logger = logger
+            self.setting = setting
+    """
+    @functools.wraps(original_function)
+    def wrapper_function(self, logger, **setting):
+        queue_manager = QueueManager()
+        
+        if queue_manager.is_enabled():
+            item_id = queue_manager.enqueue(setting, logger)
+            
+            if item_id and logger:
+                logger.info(f"Settings queued via producer decorator: id={item_id}.")
+        
+        return original_function(self, logger, **setting)
+    return wrapper_function
+
+
 class Graphql(object):
     # Parse the graphql request's body to AST and extract fields from the AST
+    @graphql_service_initialization
     def __init__(self, logger, **setting):
         self.logger = logger
         self.setting = setting
