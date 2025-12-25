@@ -62,10 +62,10 @@ from .database import Database
 json_normalize = Serializer.json_normalize
 convert_decimal_to_number = HighPerformanceJSONHandler.convert_decimal_to_number
 
-try:
-    from .graphql import JSON, Graphql, SettingsQueueManager, settings_queue_producer
-except ImportError:  # pragma: no cover - optional graphql dependency mismatch
-    JSON = None
-    Graphql = None
-    SettingsQueueManager = None
-    settings_queue_producer = None
+# try:
+#     from .graphql import JSON, Graphql, SettingsQueueManager, settings_queue_producer
+# except ImportError:  # pragma: no cover - optional graphql dependency mismatch
+#     JSON = None
+#     Graphql = None
+#     SettingsQueueManager = None
+#     settings_queue_producer = None
