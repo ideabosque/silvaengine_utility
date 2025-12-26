@@ -408,7 +408,7 @@ class Graphql(object):
         )
 
         if "__schema" in schema:
-            raise schema.get("__schema")
+            return schema.get("__schema")
 
         return schema
 
