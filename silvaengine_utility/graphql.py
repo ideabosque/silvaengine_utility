@@ -319,9 +319,9 @@ class Graphql(object):
                 "logger": self.logger,
                 "setting": self.setting,
                 "endpoint_id": params.get("endpoint_id"),
-                "part_id": params.get("part_id"),
+                # "part_id": params.get("part_id"),
                 "connection_id": params.get("connection_id"),
-                "partition_key": params.get("partition_key"),
+                # "partition_key": params.get("partition_key"),
             }
 
             if params.get("custom_headers"):
@@ -468,6 +468,9 @@ class Graphql(object):
         Returns:
             Normalized response dict with consistent structure
         """
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print(Serializer.json_dumps(response))
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         if not isinstance(response, dict):
             return response
 
