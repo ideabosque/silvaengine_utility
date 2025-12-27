@@ -358,8 +358,7 @@ class Graphql(object):
 
             return Graphql.error_response("Uncaught execution error.", 500)
         except Exception as e:
-            self.logger.info(e)
-            raise e
+            return Graphql.error_response(str(e), 500)
 
     @staticmethod
     def success_response(data):
