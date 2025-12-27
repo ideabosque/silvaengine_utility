@@ -291,7 +291,7 @@ def graphql_service_initialization(original_function):
         callable: Wrapped function that enqueues settings data
 
     Usage:
-        @settings_queue_producer
+        @graphql_service_initialization
         def __init__(self, logger, **setting):
             self.logger = logger
             self.setting = setting
@@ -299,6 +299,11 @@ def graphql_service_initialization(original_function):
 
     @functools.wraps(original_function)
     def wrapper_function(self, logger, **setting):
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
+        print(Serializer.json_dumps(setting))
+
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         queue_manager = QueueManager()
 
         if queue_manager.is_enabled():
