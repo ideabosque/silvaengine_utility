@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-__author__ = "bl"
-
 import functools
 import os
 import queue
@@ -84,7 +82,7 @@ class QueueManager:
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -274,7 +272,7 @@ class QueueManager:
             logger.info(f"Cleared {cleared_count} items from queue and metadata")
 
 
-def graphql_service_initialization(original_function):
+def graphql_service_initialization(function):
     """
     Decorator to intercept Graphql class initialization and queue settings data.
 
@@ -295,29 +293,26 @@ def graphql_service_initialization(original_function):
             self.setting = setting
     """
 
-    @functools.wraps(original_function)
-    def wrapper_function(self, logger, **setting):
+    @functools.wraps(function)
+    def wrapper_function(self, logger, **kwargs):
         try:
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-
-            print(Serializer.json_dumps(setting))
-
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
             queue_manager = QueueManager(
-                **{
-                    "queue_enabled": setting.get("queue_enabled", True),
-                }
+                queue_cleanup_interval=kwargs.get("queue_cleanup_interval", 300),
+                queue_enabled=kwargs.get("queue_cleanup_interval", True),
+                queue_ttl=kwargs.get("queue_cleanup_interval", 3600),
+                queue_max_size=kwargs.get("queue_cleanup_interval", 1000),
             )
 
             if queue_manager.is_enabled():
-                item_id = queue_manager.enqueue(setting, logger)
+                item_id = queue_manager.enqueue(kwargs, logger)
 
                 if item_id and logger:
+                    print(f"Settings queued via producer decorator: id={item_id}.")
                     logger.info(
                         f"Settings queued via producer decorator: id={item_id}."
                     )
 
-            return original_function(self, logger, **setting)
+            return function(self, logger, **kwargs)
         except Exception as e:
             raise e
 
