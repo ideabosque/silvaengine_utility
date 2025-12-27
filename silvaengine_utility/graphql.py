@@ -337,7 +337,7 @@ class Graphql(object):
             query = params.get("query")
 
             if not query:
-                return self.error_response("Invalid operations.")
+                return Graphql.error_response("Invalid operations.")
 
             execution_result = schema.execute(
                 query,
@@ -348,26 +348,29 @@ class Graphql(object):
 
             if execution_result:
                 if execution_result.data:
-                    return self.success_response(execution_result.data)
+                    return Graphql.success_response(execution_result.data)
                 elif execution_result.errors:
-                    return self.error_response(
+                    return Graphql.error_response(
                         [Utility.format_error(e) for e in execution_result.errors], 500
                     )
                 elif execution_result.invalid:
-                    return self.error_response("Invalid execution result.", 500)
+                    return Graphql.error_response("Invalid execution result.", 500)
 
-            return self.error_response("Uncaught execution error.", 500)
+            return Graphql.error_response("Uncaught execution error.", 500)
         except Exception as e:
             self.logger.info(e)
             raise e
 
-    def success_response(self, data):
-        return self._format_response(data)
+    @staticmethod
+    def success_response(data):
+        return Graphql._format_response(data)
 
-    def error_response(self, errors, status_code=400):
-        return self._format_response({"errors": errors}, status_code)
+    @staticmethod
+    def error_response(errors, status_code=400):
+        return Graphql._format_response({"errors": errors}, status_code)
 
-    def _format_response(self, data, status_code=200):
+    @staticmethod
+    def _format_response(data, status_code=200):
         return {
             "statusCode": status_code,
             "headers": {
