@@ -92,21 +92,19 @@ class QueueManager:
                     cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         if self._initialized:
             return
 
-        self._queue = queue.Queue(maxsize=1000)
+        self._queue = queue.Queue(maxsize=int(kwargs.get("queue_max_size", 1000)))
+        self._enabled = bool(kwargs.get("queue_enabled", True))
+        self._cleanup_interval = int(kwargs.get("queue_cleanup_interval", 300))
+        self._max_size = kwargs.get("queue_max_size", 1000)
+        self._retention_ttl = int(kwargs.get("queue_ttl", 3600))
         self._queue_lock = threading.RLock()
-        self._max_size = 1000
-        self._retention_ttl = int(os.getenv("SETTINGS_QUEUE_TTL", "3600"))
-        self._metadata = {}
         self._metadata_lock = threading.RLock()
-        self._enabled = os.getenv("ENVIRONMENT", "development") == "production"
-        self._cleanup_interval = int(
-            os.getenv("SETTINGS_QUEUE_CLEANUP_INTERVAL", "300")
-        )
         self._last_cleanup = time.time()
+        self._metadata = {}
         self._initialized = True
 
     def is_enabled(self):
@@ -299,20 +297,29 @@ def graphql_service_initialization(original_function):
 
     @functools.wraps(original_function)
     def wrapper_function(self, logger, **setting):
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        try:
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
-        print(Serializer.json_dumps(setting))
+            print(Serializer.json_dumps(setting))
 
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        queue_manager = QueueManager()
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            queue_manager = QueueManager(
+                **{
+                    "queue_enabled": setting.get("queue_enabled", True),
+                }
+            )
 
-        if queue_manager.is_enabled():
-            item_id = queue_manager.enqueue(setting, logger)
+            if queue_manager.is_enabled():
+                item_id = queue_manager.enqueue(setting, logger)
 
-            if item_id and logger:
-                logger.info(f"Settings queued via producer decorator: id={item_id}.")
+                if item_id and logger:
+                    logger.info(
+                        f"Settings queued via producer decorator: id={item_id}."
+                    )
 
-        return original_function(self, logger, **setting)
+            return original_function(self, logger, **setting)
+        except Exception as e:
+            raise e
 
     return wrapper_function
 
