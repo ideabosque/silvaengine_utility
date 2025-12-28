@@ -83,6 +83,9 @@ def graphql_service_initialization(func: Callable) -> Callable:
         **kwargs: Any,
     ) -> Any:
         try:
+            logger.info("*" * 100)
+            logger.info(kwargs)
+            logger.info("*" * 100)
             if "regional_deployment" in kwargs:
                 Context.set(
                     "regional_deployment",
