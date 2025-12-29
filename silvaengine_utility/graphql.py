@@ -156,7 +156,7 @@ class Graphql(object):
 
     @staticmethod
     def success_response(data):
-        return Graphql._format_response(data)
+        return Graphql._format_response({"data": data})
 
     @staticmethod
     def error_response(errors, status_code=400):
