@@ -11,6 +11,7 @@ from graphql import parse
 from graphql.language import ast
 
 from .context import Context
+from .http import HttpResponse
 from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
@@ -153,23 +154,11 @@ class Graphql(object):
 
     @staticmethod
     def success_response(data):
-        return Graphql._format_response({"data": data})
+        return HttpResponse.format_response({"data": data})
 
     @staticmethod
     def error_response(errors, status_code=400):
-        return Graphql._format_response({"errors": errors}, status_code)
-
-    @staticmethod
-    def _format_response(data, status_code=200):
-        return {
-            "statusCode": status_code,
-            "headers": {
-                "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "application/json",
-            },
-            "body": Serializer.json_dumps(data),
-        }
+        return HttpResponse.format_response({"errors": errors}, status_code)
 
     @staticmethod
     def execute_graphql_query(
