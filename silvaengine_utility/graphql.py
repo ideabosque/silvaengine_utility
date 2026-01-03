@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import asyncio
 import functools
 import logging
 from typing import Any, Callable, Optional
 
 import graphene
-from graphql import parse
+from graphql import execute_sync, parse
 from graphql.language import ast
 
 from .context import Context
@@ -131,11 +132,13 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response("Invalid operations.")
 
-            execution_result = schema.execute(
-                query,
-                context_value=context,
-                variable_values=params.get("variables", {}),
-                operation_name=params.get("operation_name"),
+            execution_result = asyncio.run(
+                schema.execute_sync(
+                    query,
+                    context_value=context,
+                    variable_values=params.get("variables", {}),
+                    operation_name=params.get("operation_name"),
+                )
             )
 
             if execution_result:
