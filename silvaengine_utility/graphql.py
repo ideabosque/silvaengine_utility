@@ -8,7 +8,7 @@ import logging
 from typing import Any, Callable, Optional
 
 import graphene
-from graphql import execute_sync, parse
+from graphql import parse
 from graphql.language import ast
 
 from .context import Context
