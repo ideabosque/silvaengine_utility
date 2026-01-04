@@ -176,9 +176,6 @@ class Graphql(object):
             "variables": variables,
             **context,
         }
-        print(f"execute_graphql_query(params) {'=' * 80} {params}")
-        print(f"execute_graphql_query(context) {'=' * 80} {context}")
-        print(f"execute_graphql_query(function) {'=' * 80} {funct}")
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,

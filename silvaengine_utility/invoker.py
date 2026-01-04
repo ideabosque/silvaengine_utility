@@ -283,6 +283,7 @@ class Invoker(object):
                 "setting": setting,
             },
         )
+
         if invocation_type == "Event" or not result or result == "null":
             return
 
@@ -301,5 +302,7 @@ class Invoker(object):
 
         if "errors" in result:
             raise Exception(result["errors"])
+        elif "data" in result:
+            return result["data"]
 
-        return result["data"]
+        return result
