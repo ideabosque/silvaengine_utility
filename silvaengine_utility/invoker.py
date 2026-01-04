@@ -305,4 +305,8 @@ class Invoker(object):
         elif "data" in result:
             return result["data"]
 
+        print(f"{'*' * 30} invoke_funct_on_aws_lambda start {'*' * 30}")
+        print(Serializer.json_dumps(result))
+        print(f"{'*' * 31} invoke_funct_on_aws_lambda end {'*' * 31}")
+
         return result
