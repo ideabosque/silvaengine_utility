@@ -174,7 +174,7 @@ class Graphql(object):
         params = {
             "query": query,
             "variables": variables,
-            "connection_id": context.get("connection_id"),
+            **context,
         }
         print(f"execute_graphql_query(params) {'=' * 80} {params}")
         print(f"execute_graphql_query(context) {'=' * 80} {context}")
