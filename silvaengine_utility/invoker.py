@@ -1,13 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from types import FunctionType
+
+import asyncio
+import traceback
 from importlib import import_module
 from importlib.util import find_spec
+from types import FunctionType
 from typing import Any, Dict
+
 from .serializer import Serializer
 from .utility import Utility
-import asyncio, traceback
+
 
 class Invoker(object):
     @staticmethod
@@ -148,6 +152,11 @@ class Invoker(object):
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
+        print("=" * 80)
+        print(f"function_name: {function_name}")
+        print(f"invocation_type: {invocation_type}")
+        print(f"payload: {payload}")
+        print("=" * 80)
         response = aws_lambda.invoke(
             FunctionName=function_name,
             InvocationType=invocation_type,
