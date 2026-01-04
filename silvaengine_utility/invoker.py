@@ -144,7 +144,14 @@ class Invoker(object):
 
     @staticmethod
     def _invoke_funct_on_aws_lambda(logger, aws_lambda, **kwargs):
-        function_name = kwargs.get("function_name", "silvaengine_agenttask")
+        function_name = kwargs.get(
+            "function_name",
+            kwargs.get("setting", {}).get("lambda_task_function"),
+        )
+
+        if not function_name and kwargs.get("endpoint_id"):
+            function_name = f"{kwargs.get('endpoint_id')}_silvaengine_microcore"
+
         invocation_type = kwargs.get("invocation_type", "RequestResponse")
         payload = {
             "endpoint_id": kwargs["endpoint_id"],
@@ -157,6 +164,7 @@ class Invoker(object):
         print(f"invocation_type: {invocation_type}")
         print(f"payload: {payload}")
         print("=" * 80)
+
         response = aws_lambda.invoke(
             FunctionName=function_name,
             InvocationType=invocation_type,
@@ -268,6 +276,7 @@ class Invoker(object):
                 "part_id": part_id,
                 "funct": funct,
                 "params": params,
+                "setting": setting,
             },
         )
         if invocation_type == "Event" or not result or result == "null":
