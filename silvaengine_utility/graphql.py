@@ -202,10 +202,10 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if "data" in schema:
+        if schema and "data" in schema:
             schema = schema.get("data")
 
-        if "__schema" in schema:
+        if schema and "__schema" in schema:
             return schema.get("__schema")
 
         return schema

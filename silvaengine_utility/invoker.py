@@ -271,6 +271,10 @@ class Invoker(object):
             logger,
             aws_lambda,
             **{
+                "function_name": setting.get(
+                    "lambda_task_function",
+                    f"{endpoint_id}_silvaengine_microcore",
+                ),
                 "invocation_type": invocation_type,
                 "endpoint_id": endpoint_id,
                 "part_id": part_id,
