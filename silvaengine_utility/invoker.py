@@ -150,7 +150,7 @@ class Invoker(object):
         )
 
         if not function_name and kwargs.get("endpoint_id"):
-            function_name = f"{kwargs.get('endpoint_id')}_silvaengine_microcore"
+            function_name = f"{kwargs.get('endpoint_id')}_silvaengine_agenttask"
 
         invocation_type = kwargs.get("invocation_type", "RequestResponse")
         payload = {
@@ -273,7 +273,7 @@ class Invoker(object):
             **{
                 "function_name": setting.get(
                     "lambda_task_function",
-                    f"{endpoint_id}_silvaengine_microcore",
+                    f"{endpoint_id}_silvaengine_agenttask",
                 ),
                 "invocation_type": invocation_type,
                 "endpoint_id": endpoint_id,
