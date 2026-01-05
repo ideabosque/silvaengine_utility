@@ -6,7 +6,6 @@ from importlib import import_module
 from importlib.util import find_spec
 from typing import Any, Dict
 from .serializer import Serializer
-from .utility import Utility
 import asyncio, traceback
 
 class Invoker(object):

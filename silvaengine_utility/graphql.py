@@ -5,7 +5,9 @@ from __future__ import print_function
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union, Dict
+from graphene import Schema
+import boto3
 
 import graphene
 from graphql import parse
@@ -108,11 +110,11 @@ def graphql_service_initialization(func: Callable) -> Callable:
 class Graphql(object):
     # Parse the graphql request's body to AST and extract fields from the AST
     @graphql_service_initialization
-    def __init__(self, logger, **setting):
+    def __init__(self, logger: Optional[logging.Logger], **setting: Any) -> None:
         self.logger = logger
         self.setting = setting
 
-    def execute(self, schema, **params):
+    def execute(self, schema: Schema, **params: Dict[str, Any]) -> Any:
         try:
             context = {
                 "logger": self.logger,
@@ -156,21 +158,23 @@ class Graphql(object):
             return Graphql.error_response(str(e), 500)
 
     @staticmethod
-    def success_response(data):
+    def success_response(data: Any) -> dict[str, Any]:
         return HttpResponse.format_response({"data": data})
 
     @staticmethod
-    def error_response(errors, status_code=400):
+    def error_response(
+        errors: Union[str, list], status_code: int = 400
+    ) -> dict[str, Any]:
         return HttpResponse.format_response({"errors": errors}, status_code)
 
     @staticmethod
     def execute_graphql_query(
-        context,
-        funct,
-        query,
-        variables={},
-        aws_lambda=None,
-    ):
+        context: dict[str, Any],
+        funct: str,
+        query: str,
+        variables: dict[str, Any] = {},
+        aws_lambda: boto3.client = None,
+    ) -> dict[str, Any]:
         params = {
             "query": query,
             "variables": variables,
@@ -188,10 +192,10 @@ class Graphql(object):
 
     @staticmethod
     def fetch_graphql_schema(
-        context,
-        funct,
-        aws_lambda=None,
-    ):
+        context: dict[str, Any],
+        funct: str,
+        aws_lambda: boto3.client = None,
+    ) -> dict[str, Any]:
         schema = Graphql.execute_graphql_query(
             context,
             funct,
@@ -199,16 +203,19 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if "data" in schema:
-            schema = schema.get("data")
+        if schema is not None:
+            if "data" in schema:
+                schema = schema.get("data")
 
-        if "__schema" in schema:
-            return schema.get("__schema")
+            if schema is not None and "__schema" in schema:
+                return schema.get("__schema") or {}
 
-        return schema
+        return schema if schema is not None else {}
 
     @staticmethod
-    def extract_available_fields(schema, type_name):
+    def extract_available_fields(
+        schema: dict[str, Any], type_name: str
+    ) -> list[dict[str, Any]]:
         for type_def in schema["types"]:
             if type_def["name"] == type_name and type_def["kind"] == "OBJECT":
                 return [
@@ -223,7 +230,7 @@ class Graphql(object):
         raise Exception(f"Type '{type_name}' not found in schema.")
 
     @staticmethod
-    def generate_field_subselection(schema, type_name):
+    def generate_field_subselection(schema: dict[str, Any], type_name: str) -> str:
         try:
             fields = Graphql.extract_available_fields(schema, type_name)
             subselection = []
@@ -250,7 +257,9 @@ class Graphql(object):
             return ""
 
     @staticmethod
-    def normalize_graphql_response(response, operation_name=None):
+    def normalize_graphql_response(
+        response: Any, operation_name: Optional[str] = None
+    ) -> dict[str, Any]:
         """
         Normalize GraphQL response to ensure consistent structure for test compatibility.
 
@@ -286,8 +295,10 @@ class Graphql(object):
         return response
 
     @staticmethod
-    def generate_graphql_operation(operation_name, operation_type, schema):
-        def format_type(field_type):
+    def generate_graphql_operation(
+        operation_name: str, operation_type: str, schema: dict[str, Any]
+    ) -> str:
+        def format_type(field_type: dict[str, Any]) -> str:
             """Format the GraphQL type."""
             if field_type["kind"] == "NON_NULL":
                 return f"{format_type(field_type['ofType'])}!"
@@ -295,7 +306,9 @@ class Graphql(object):
                 return f"[{format_type(field_type['ofType']) if field_type.get('ofType') else 'String'}]"
             return field_type["name"]
 
-        def extract_operation_details(schema, operation_name, operation_type):
+        def extract_operation_details(
+            schema: dict[str, Any], operation_name: str, operation_type: str
+        ) -> dict[str, Any]:
             """Extract operation details (query or mutation) from the schema."""
             for type_def in schema["types"]:
                 if type_def["name"] == (
@@ -336,142 +349,6 @@ class Graphql(object):
         }}
         """
 
-    # @staticmethod
-    # def extract_fields_from_ast(source, **kwargs):
-    #     def extract_by_recursion(selections, **kwargs):
-    #         fs = []
-    #         dpt = kwargs.get("deepth")
-
-    #         if type(dpt) is not int or dpt < 1:
-    #             dpt = None
-    #         else:
-
-    #             dpt -= 1
-
-    #         for s in selections:
-    #             if not (s.name.value in fs):
-    #                 fs.append(s.name.value.lower())
-
-    #             if (
-    #                 (dpt is None or dpt > 0)
-    #                 and hasattr(s, "selection_set")
-    #                 and type(s.selection_set) is SelectionSet
-    #                 and type(s.selection_set.selections) is list
-    #                 and len(s.selection_set.selections) > 0
-    #             ):
-    #                 fs += extract_by_recursion(s.selection_set.selections, deepth=dpt)
-
-    #         return fs
-
-    #     result = dict()
-    #     operation = kwargs.get("operation")
-    #     deepth = kwargs.get("deepth")
-    #     ast = parse(source)
-
-    #     for od in ast.definitions:
-    #         on = od.operation.lower()
-
-    #         if operation and on != operation.lower():
-    #             continue
-
-    #         result[on] = [od.name.value]
-
-    #         if on in result:
-    #             result[on] += extract_by_recursion(
-    #                 od.selection_set.selections, deepth=deepth
-    #             )
-    #         else:
-    #             result[on] = extract_by_recursion(
-    #                 od.selection_set.selections, deepth=deepth
-    #             )
-
-    #     for operation in result:
-    #         result[operation] = list({}.fromkeys(result[operation]).keys())
-
-    #     return result
-
-    # @staticmethod
-    # def extract_flatten_ast(source):
-    #     def extract_by_recursion(selections, path=""):
-    #         fields = []
-
-    #         if not path or path[-1] != "/":
-    #             path += "/"
-
-    #         for field in selections:
-    #             if (
-    #                 not hasattr(field, "name")
-    #                 or field.name is None
-    #                 or not hasattr(field.name, "value")
-    #                 or not field.name.value
-    #             ):
-    #                 continue
-
-    #             value = field.name.value.strip().lower()
-
-    #             fields.append({"field": value, "path": path.strip().lower()})
-
-    #             if (
-    #                 hasattr(field, "selection_set")
-    #                 and type(field.selection_set) is SelectionSet
-    #                 and type(field.selection_set.selections) is list
-    #                 and len(field.selection_set.selections) > 0
-    #             ):
-    #                 fields += extract_by_recursion(
-    #                     field.selection_set.selections, path + value
-    #                 )
-
-    #         return fields
-
-    #     def flatten(selections):
-    #         output = {}
-
-    #         for item in extract_by_recursion(selections):
-    #             if output.get(item.get("path")) is None:
-    #                 output[item.get("path")] = []
-
-    #             if item.get("field") is not None and item.get("field") != "":
-    #                 output[item.get("path")].append(item.get("field"))
-
-    #         return output
-
-    #     results = []
-    #     ast = parse(source)
-
-    #     if (
-    #         ast
-    #         and hasattr(ast, "definitions")
-    #         and type(ast.definitions) is list
-    #         and len(ast.definitions)
-    #     ):
-    #         for operation_definition in ast.definitions:
-    #             result = {}
-
-    #             if hasattr(operation_definition, "operation"):
-    #                 result["operation"] = operation_definition.operation.strip().lower()
-
-    #             if hasattr(operation_definition, "name") and hasattr(
-    #                 operation_definition.name, "value"
-    #             ):
-    #                 result[
-    #                     "operation_name"
-    #                 ] = operation_definition.name.value.strip().lower()
-
-    #             if (
-    #                 hasattr(operation_definition, "selection_set")
-    #                 and type(operation_definition.selection_set) is SelectionSet
-    #                 and hasattr(operation_definition.selection_set, "selections")
-    #                 and type(operation_definition.selection_set.selections) is list
-    #                 and len(operation_definition.selection_set.selections) > 0
-    #             ):
-    #                 result["fields"] = flatten(
-    #                     operation_definition.selection_set.selections
-    #                 )
-
-    #             results.append(result)
-
-    #     return results
-
 
 class JSON(graphene.Scalar):
     """
@@ -481,7 +358,7 @@ class JSON(graphene.Scalar):
     """
 
     @staticmethod
-    def identity(value):
+    def identity(value: Any) -> Any:
         if isinstance(value, (str, bool, int, float)):
             return value.__class__(value)
         elif isinstance(value, (list, dict)):
@@ -493,7 +370,7 @@ class JSON(graphene.Scalar):
     parse_value = identity
 
     @staticmethod
-    def parse_literal(node):
+    def parse_literal(node: ast.Node) -> Any:
         if isinstance(node, (ast.StringValue, ast.BooleanValue)):
             return node.value
         elif isinstance(node, ast.IntValue):
