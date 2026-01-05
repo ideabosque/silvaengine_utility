@@ -32,6 +32,7 @@ __all__ = [
     "Graphql",
     "Invoker",
     "Serializer",
+    "Authorizer",
     "HttpResponse",
     "Database",
     "JSON",
@@ -40,7 +41,6 @@ __all__ = [
     "HybridCacheEngine",
     "hybrid_cache",
     "method_cache",
-    "performance_monitor",
     "set_performance_log_threshold",
     "get_performance_log_threshold",
 ]

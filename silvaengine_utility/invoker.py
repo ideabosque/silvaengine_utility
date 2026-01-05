@@ -175,11 +175,6 @@ class Invoker(object):
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
-        print("=" * 80)
-        print(f"function_name: {function_name}")
-        print(f"invocation_type: {invocation_type}")
-        print(f"payload: {payload}")
-        print("=" * 80)
 
         response = aws_lambda.invoke(
             FunctionName=function_name,
