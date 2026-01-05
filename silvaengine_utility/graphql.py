@@ -323,6 +323,9 @@ class Graphql(object):
                 f"{operation_type.capitalize()} '{operation_name}' not found in the schema."
             )
 
+        print(f"schema {'>' * 68} {schema}")
+        print(f"operation_name {'>' * 60} {schema}")
+        print(f"operation_type {'>' * 60} {schema}")
         operation_details = extract_operation_details(
             schema, operation_name, operation_type
         )
