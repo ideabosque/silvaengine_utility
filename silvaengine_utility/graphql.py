@@ -205,7 +205,7 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if schema and type(schema) is not dict:
+        if schema and type(schema) is dict:
             if "data" in schema:
                 schema = schema.get("data")
 
