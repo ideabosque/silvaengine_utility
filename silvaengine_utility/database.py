@@ -2,12 +2,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+from typing import Any, Dict
+
+
 class Database(object):
     @staticmethod
-    def create_database_session(settings):
+    def create_database_session(settings: Dict[str, Any]) -> Any:
         try:
             from sqlalchemy import create_engine, orm
             from sqlalchemy.ext.declarative import DeclarativeMeta
+
 
             assert type(settings) is dict and len(
                 settings

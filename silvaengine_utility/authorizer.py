@@ -5,7 +5,7 @@ from __future__ import print_function
 __author__ = "bl"
 
 import re
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Optional, Union
 
 
 class HttpVerb:
@@ -34,8 +34,8 @@ class AuthPolicy(object):
     conditions statement.
     the build method processes these lists and generates the approriate
     statements for the final policy"""
-    allowMethods = []
-    denyMethods = []
+    allowMethods: List[Dict[str, Any]] = []
+    denyMethods: List[Dict[str, Any]] = []
 
     restApiId = "<<restApiId>>"
     """ Replace the placeholder value with a default API Gateway API id to be used in the policy. 
@@ -52,16 +52,19 @@ class AuthPolicy(object):
     Beware of using '*' since it will not simply mean any stage, because stars will greedily expand over '/' or other separators. 
     See https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html for more details. """
 
-    def __init__(self, principal, awsAccountId):
+    def __init__(self, principal: str, awsAccountId: str) -> None:
         self.awsAccountId = awsAccountId
         self.principalId = principal
         self.allowMethods = []
         self.denyMethods = []
 
-    def _addMethod(self, effect, verb, resource, conditions):
+    def _addMethod(
+        self, effect: str, verb: str, resource: str, conditions: List[Dict[str, Any]]
+    ) -> None:
         """Adds a method to the internal lists of allowed or denied methods. Each object in
         the internal list contains a resource ARN and a condition statement. The condition
         statement can be null."""
+
         if verb != "*" and not hasattr(HttpVerb, verb):
             raise NameError(
                 "Invalid HTTP verb " + verb + ". Allowed verbs in HttpVerb class"
@@ -91,7 +94,7 @@ class AuthPolicy(object):
                 {"resourceArn": resourceArn, "conditions": conditions}
             )
 
-    def _getEmptyStatement(self, effect):
+    def _getEmptyStatement(self, effect: str) -> Dict[str, Any]:
         """Returns an empty statement object prepopulated with the correct action and the
         desired effect."""
         statement = {
@@ -102,7 +105,9 @@ class AuthPolicy(object):
 
         return statement
 
-    def _getStatementForEffect(self, effect, methods):
+    def _getStatementForEffect(
+        self, effect: str, methods: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """This function loops over an array of objects containing a resourceArn and
         conditions statement and generates the array of statements for the policy."""
         statements = []
@@ -123,41 +128,46 @@ class AuthPolicy(object):
 
         return statements
 
-    def allowAllMethods(self):
+    def allowAllMethods(self) -> None:
         """Adds a '*' allow to the policy to authorize access to all methods of an API"""
         self._addMethod("Allow", HttpVerb.ALL, "*", [])
 
-    def denyAllMethods(self):
+    def denyAllMethods(self) -> None:
         """Adds a '*' allow to the policy to deny access to all methods of an API"""
         self._addMethod("Deny", HttpVerb.ALL, "*", [])
 
-    def allowMethod(self, verb, resource):
+    def allowMethod(self, verb: str, resource: str) -> None:
         """Adds an API Gateway method (Http verb + Resource path) to the list of allowed
         methods for the policy"""
         self._addMethod("Allow", verb, resource, [])
 
-    def denyMethod(self, verb, resource):
+    def denyMethod(self, verb: str, resource: str) -> None:
         """Adds an API Gateway method (Http verb + Resource path) to the list of denied
         methods for the policy"""
         self._addMethod("Deny", verb, resource, [])
 
-    def allowMethodWithConditions(self, verb, resource, conditions):
+    def allowMethodWithConditions(
+        self, verb: str, resource: str, conditions: List[Dict[str, Any]]
+    ) -> None:
         """Adds an API Gateway method (Http verb + Resource path) to the list of allowed
         methods and includes a condition for the policy statement. More on AWS policy
         conditions here: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Condition"""
         self._addMethod("Allow", verb, resource, conditions)
 
-    def denyMethodWithConditions(self, verb, resource, conditions):
+    def denyMethodWithConditions(
+        self, verb: str, resource: str, conditions: List[Dict[str, Any]]
+    ) -> None:
         """Adds an API Gateway method (Http verb + Resource path) to the list of denied
         methods and includes a condition for the policy statement. More on AWS policy
         conditions here: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Condition"""
         self._addMethod("Deny", verb, resource, conditions)
 
-    def build(self):
+    def build(self) -> Dict[str, Any]:
         """Generates the policy document based on the internal lists of allowed and denied
         conditions. This will generate a policy with two main statements for the effect:
         one statement for Allow and one statement for Deny.
         Methods that includes conditions will have their own statement in the policy."""
+
         if (self.allowMethods is None or len(self.allowMethods) == 0) and (
             self.denyMethods is None or len(self.denyMethods) == 0
         ):
@@ -192,7 +202,9 @@ class Authorizer(object):
             if arn_parts and len(arn_parts) > 3:
                 self.policy.region = arn_parts[3]
 
-    def authorize(self, is_allow=True, context=None):
+    def authorize(
+        self, is_allow: bool = True, context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         getattr(self.policy, "allowAllMethods" if is_allow else "denyAllMethods")()
 
         # Finally, build the policy

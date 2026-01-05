@@ -7,23 +7,27 @@ import traceback
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
-from typing import Any, Dict
-
+from typing import Any, Callable, Dict, List, Optional, Union
+import boto3
 from .serializer import Serializer
-from .utility import Utility
+import logging
 
 
 class Invoker(object):
     @staticmethod
-    def is_static_method(callable_method):
+    def is_static_method(callable_method: Any) -> bool:
         return callable(callable_method) and type(callable_method) is FunctionType
 
     @staticmethod
     def import_dynamically(
-        module_name, function_name, class_name=None, constructor_parameters=None
-    ):
+        module_name: str,
+        function_name: str,
+        class_name: Optional[str] = None,
+        constructor_parameters: Optional[Dict[str, Any]] = None,
+    ) -> Any:
         """
         Dynamically imports a module and retrieves a function or method.
+
 
         This method loads a module dynamically, optionally instantiates a class from that module,
         and returns a callable function or method.
@@ -109,10 +113,12 @@ class Invoker(object):
 
     # Call function by async
     @staticmethod
-    def call_by_async(callables):
+    def call_by_async(callables: Union[List[Callable], Callable]) -> Any:
         try:
 
-            async def exec_async_functions(callables):
+            async def exec_async_functions(
+                callables: Union[List[Callable], Callable],
+            ) -> Any:
                 if isinstance(callables, list) and callables:
                     return await asyncio.gather(
                         *[
@@ -128,22 +134,30 @@ class Invoker(object):
             raise e
 
     @staticmethod
-    def _invoke_funct_on_local(logger, funct, funct_on_local, setting, **params):
+    def _invoke_funct_on_local(
+        logger: logging.Logger,
+        funct: str,
+        funct_on_local: Dict[str, Any],
+        setting: Dict[str, Any],
+        **params: Dict[str, Any],
+    ) -> Any:
         funct_on_local_class = getattr(
             __import__(funct_on_local["module_name"]),
             funct_on_local["class_name"],
         )
-        funct_on_local = getattr(
+        funct_on_local_method = getattr(
             funct_on_local_class(
                 logger,
                 **setting,
             ),
             funct,
         )
-        return funct_on_local(**params)
+        return funct_on_local_method(**params)
 
     @staticmethod
-    def _invoke_funct_on_aws_lambda(logger, aws_lambda, **kwargs):
+    def _invoke_funct_on_aws_lambda(
+        logger: logging.Logger, aws_lambda: boto3.client, **kwargs: Dict[str, Any]
+    ) -> Any:
         function_name = kwargs.get(
             "function_name",
             kwargs.get("setting", {}).get("lambda_task_function"),
@@ -181,7 +195,12 @@ class Invoker(object):
         return
 
     @staticmethod
-    def _invoke_funct_on_aws_sqs(logger, task_queue, message_group_id, **kwargs):
+    def _invoke_funct_on_aws_sqs(
+        logger: logging.Logger,
+        task_queue: boto3.resource,
+        message_group_id: str,
+        **kwargs: Dict[str, Any],
+    ) -> None:
         try:
             task_queue.send_message(
                 MessageAttributes={
@@ -206,11 +225,11 @@ class Invoker(object):
 
     @staticmethod
     def invoke_funct_on_local(
-        logger,
-        setting,
-        funct,
-        **params,
-    ):
+        logger: logging.Logger,
+        setting: Dict[str, Any],
+        funct: str,
+        **params: Dict[str, Any],
+    ) -> Any:
         try:
             funct_on_local = setting["functs_on_local"].get(funct)
             assert funct_on_local is not None, f"Function ({funct}) not found."
@@ -233,13 +252,14 @@ class Invoker(object):
     def invoke_funct_on_aws_lambda(
         context: Dict[str, Any],
         funct: str,
-        params={},
-        aws_lambda=None,
-        invocation_type="RequestResponse",
-        message_group_id=None,
-        task_queue=None,
-    ):
+        params: Dict[str, Any] = {},
+        aws_lambda: boto3.client = None,
+        invocation_type: str = "RequestResponse",
+        message_group_id: Optional[str] = None,
+        task_queue: boto3.resource = None,
+    ) -> Any:
         logger = context.get("logger")
+
         endpoint_id = context.get("endpoint_id")
         part_id = context.get("part_id")
         setting = context.get("setting", {})

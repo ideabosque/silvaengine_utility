@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+from typing import Any, Dict, Optional, Union
+
 from .datetime_handler import PendulumDateTimeHandler
 from .json_handler import HighPerformanceJSONHandler
 from .performance_monitor import performance_monitor
@@ -8,18 +10,19 @@ from .performance_monitor import performance_monitor
 _JSON_HANDLER = HighPerformanceJSONHandler()
 _DATETIME_HANDLER = PendulumDateTimeHandler()
 
+
 class Serializer(object):
     json_handler = _JSON_HANDLER
     datetime_handler = _DATETIME_HANDLER
     performance_monitor = performance_monitor
 
     @staticmethod
-    def is_json_string(string):
+    def is_json_string(string: str) -> bool:
         """Check if string is valid JSON using high-performance handler."""
         return Serializer.json_handler.is_json_string(string)
-    
+
     @staticmethod
-    def json_dumps(data, **kwargs):
+    def json_dumps(data: Any, **kwargs: Dict[str, Any]) -> str:
         # Use consistent formatting with original jsonencode behavior
         defaults = {
             "compact": False,
@@ -31,15 +34,23 @@ class Serializer(object):
         return Serializer.json_handler.dumps(data, **defaults)
 
     @staticmethod
-    def json_loads(data, parser_number=True, parse_datetime=True, **kwargs):
+    def json_loads(
+        data: Union[str, bytes],
+        parser_number: bool = True,
+        parse_datetime: bool = True,
+        **kwargs: Dict[str, Any],
+    ) -> Any:
         return Serializer.json_handler.loads(
             data, parser_number=parser_number, parse_datetime=parse_datetime, **kwargs
         )
 
     @staticmethod
-    def json_normalize(data, parser_number=True, parse_datetime=True):
+    def json_normalize(
+        data: Any, parser_number: bool = True, parse_datetime: bool = True
+    ) -> Any:
         """
         Normalize data types as if going through JSON serialization/deserialization.
+
 
         This function simulates json_loads(json_dumps(obj)) without the overhead of
         actual JSON string creation and parsing.
@@ -67,22 +78,22 @@ class Serializer(object):
         )
 
     @staticmethod
-    def get_json_performance_stats():
+    def get_json_performance_stats() -> Dict[str, Any]:
         """Get comprehensive JSON performance statistics."""
         return performance_monitor.get_performance_stats()
 
     @staticmethod
-    def reset_json_performance_stats():
+    def reset_json_performance_stats() -> None:
         """Reset JSON performance statistics."""
         return performance_monitor.reset_performance_stats()
 
     @staticmethod
-    def get_json_performance_summary():
+    def get_json_performance_summary() -> str:
         """Get human-readable JSON performance summary."""
         return performance_monitor.get_performance_summary()
 
     @staticmethod
-    def get_library_info():
+    def get_library_info() -> Dict[str, Any]:
         """Get information about performance libraries being used."""
         return {
             "json": Serializer.json_handler.get_library_info(),

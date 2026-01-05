@@ -5,12 +5,13 @@ from __future__ import print_function
 import re
 import socket
 import struct
+from typing import Any, Dict, List, Union, Optional
 
 __author__ = "bibow"
 
 
 class Struct(object):
-    def __init__(self, **d):
+    def __init__(self, **d: Any) -> None:
         for a, b in d.items():
             if isinstance(b, (list, tuple)):
                 setattr(self, a, [Struct(**x) if isinstance(x, dict) else x for x in b])
@@ -19,15 +20,15 @@ class Struct(object):
 
 
 class Utility(object):
-    _snake_case_cache = {}
+    _snake_case_cache: Dict[str, str] = {}
 
     @staticmethod
-    def format_error(error):
+    def format_error(error: Exception) -> Dict[str, str]:
         return {"message": str(error)}
 
     # Check the specified ip exists in the given ip segment
     @staticmethod
-    def in_subnet(ip, subnet) -> bool:
+    def in_subnet(ip: str, subnet: Union[str, List[str]]) -> bool:
         if isinstance(subnet, str) and subnet:
             match = re.match("(.*)/(.*)", subnet)
 
@@ -48,7 +49,7 @@ class Utility(object):
 
     # Convert camel case to underscore
     @staticmethod
-    def convert_camel_to_underscore(text, separator="_"):
+    def convert_camel_to_underscore(text: str, separator: str = "_") -> str:
         if not separator:
             separator = "_"
 
@@ -116,7 +117,7 @@ class Utility(object):
         return snake_case
 
     @staticmethod
-    def convert_object_to_dict(instance):
+    def convert_object_to_dict(instance: Any) -> Dict[str, Any]:
         attributes = {}
 
         for attribute in dir(instance):
