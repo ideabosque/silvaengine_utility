@@ -205,14 +205,7 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if schema:
-            if type(schema) is not dict:
-                schema = Serializer.json_loads(schema).get("body", {})
-
-            print(
-                f"Schema {'~' * 60} {type(schema)} {bool('data' in schema)} {bool('__schema' in schema)}"
-            )
-
+        if schema and type(schema) is not dict:
             if "data" in schema:
                 schema = schema.get("data")
 

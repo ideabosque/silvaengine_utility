@@ -3,14 +3,16 @@
 from __future__ import print_function
 
 import asyncio
+import logging
 import traceback
 from importlib import import_module
 from importlib.util import find_spec
 from types import FunctionType
 from typing import Any, Callable, Dict, List, Optional, Union
+
 import boto3
+
 from .serializer import Serializer
-import logging
 
 
 class Invoker(object):
@@ -322,7 +324,10 @@ class Invoker(object):
 
         if "errors" in result:
             raise Exception(result["errors"])
-        elif "data" in result:
+        elif "body" in result:
+            result = result["body"]
+
+        if "data" in result:
             return result["data"]
 
         print(f"{'*' * 30} invoke_funct_on_aws_lambda start {'*' * 30}")
