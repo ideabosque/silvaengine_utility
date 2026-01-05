@@ -178,7 +178,7 @@ class Graphql(object):
         params = {
             "query": query,
             "variables": variables,
-            "connection_id": context.get("connection_id"),
+            **context,
         }
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
@@ -203,12 +203,11 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if schema is not None:
-            if "data" in schema:
-                schema = schema.get("data")
+        if schema and "data" in schema:
+            schema = schema.get("data")
 
-            if schema is not None and "__schema" in schema:
-                return schema.get("__schema") or {}
+        if schema and "__schema" in schema:
+            return schema.get("__schema")
 
         return schema if schema is not None else {}
 

@@ -1,12 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
-from types import FunctionType
+
+import asyncio
+import traceback
 from importlib import import_module
 from importlib.util import find_spec
+from types import FunctionType
 from typing import Any, Dict
+
 from .serializer import Serializer
-import asyncio, traceback
+from .utility import Utility
+
 
 class Invoker(object):
     @staticmethod
@@ -139,7 +144,14 @@ class Invoker(object):
 
     @staticmethod
     def _invoke_funct_on_aws_lambda(logger, aws_lambda, **kwargs):
-        function_name = kwargs.get("function_name", "silvaengine_agenttask")
+        function_name = kwargs.get(
+            "function_name",
+            kwargs.get("setting", {}).get("lambda_task_function"),
+        )
+
+        if not function_name and kwargs.get("endpoint_id"):
+            function_name = f"{kwargs.get('endpoint_id')}_silvaengine_agenttask"
+
         invocation_type = kwargs.get("invocation_type", "RequestResponse")
         payload = {
             "endpoint_id": kwargs["endpoint_id"],
@@ -147,6 +159,12 @@ class Invoker(object):
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
+        print("=" * 80)
+        print(f"function_name: {function_name}")
+        print(f"invocation_type: {invocation_type}")
+        print(f"payload: {payload}")
+        print("=" * 80)
+
         response = aws_lambda.invoke(
             FunctionName=function_name,
             InvocationType=invocation_type,
@@ -253,13 +271,19 @@ class Invoker(object):
             logger,
             aws_lambda,
             **{
+                "function_name": setting.get(
+                    "lambda_task_function",
+                    f"{endpoint_id}_silvaengine_agenttask",
+                ),
                 "invocation_type": invocation_type,
                 "endpoint_id": endpoint_id,
                 "part_id": part_id,
                 "funct": funct,
                 "params": params,
+                "setting": setting,
             },
         )
+
         if invocation_type == "Event" or not result or result == "null":
             return
 
@@ -278,5 +302,11 @@ class Invoker(object):
 
         if "errors" in result:
             raise Exception(result["errors"])
+        elif "data" in result:
+            return result["data"]
 
-        return result["data"]
+        print(f"{'*' * 30} invoke_funct_on_aws_lambda start {'*' * 30}")
+        print(Serializer.json_dumps(result))
+        print(f"{'*' * 31} invoke_funct_on_aws_lambda end {'*' * 31}")
+
+        return result
