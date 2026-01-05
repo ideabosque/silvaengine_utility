@@ -78,21 +78,6 @@ class Serializer(object):
         )
 
     @staticmethod
-    def get_json_performance_stats() -> Dict[str, Any]:
-        """Get comprehensive JSON performance statistics."""
-        return performance_monitor.get_performance_stats()
-
-    @staticmethod
-    def reset_json_performance_stats() -> None:
-        """Reset JSON performance statistics."""
-        return performance_monitor.reset_performance_stats()
-
-    @staticmethod
-    def get_json_performance_summary() -> str:
-        """Get human-readable JSON performance summary."""
-        return performance_monitor.get_performance_summary()
-
-    @staticmethod
     def get_library_info() -> Dict[str, Any]:
         """Get information about performance libraries being used."""
         return {
