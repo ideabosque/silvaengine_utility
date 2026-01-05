@@ -96,10 +96,14 @@ def graphql_service_initialization(func: Callable) -> Callable:
                     "endpoint_id", str(kwargs.get("endpoint_id")).strip().lower()
                 )
 
-            logger.info(f"Decorator `graphql_service_initialization` completed.")
+            if logger:
+                logger.info("Decorator `graphql_service_initialization` completed.")
             return func(self, logger, **kwargs)
         except Exception as e:
-            logger.info(f"Decorator `graphql_service_initialization` exception: {e}")
+            if logger:
+                logger.info(
+                    f"Decorator `graphql_service_initialization` exception: {e}"
+                )
             return func(self, logger, **kwargs)
 
     return wrapper_function
