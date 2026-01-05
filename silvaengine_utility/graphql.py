@@ -5,11 +5,11 @@ from __future__ import print_function
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, Optional, Union, Dict
-from graphene import Schema
-import boto3
+from typing import Any, Callable, Dict, Optional, Union
 
+import boto3
 import graphene
+from graphene import Schema
 from graphql import parse
 from graphql.language import ast
 
@@ -82,9 +82,7 @@ def graphql_service_initialization(func: Callable) -> Callable:
 
     @functools.wraps(func)
     def wrapper_function(
-        self: Any,
-        logger: Optional[logging.Logger],
-        **kwargs: Any,
+        self, logger: Optional[logging.Logger], **kwargs: Dict[str, Any]
     ) -> Any:
         try:
             if "regional_deployment" in kwargs:
