@@ -323,12 +323,15 @@ class Invoker(object):
             result = Serializer.json_loads(result)
 
         if "errors" in result:
-            raise Exception(result["errors"])
+            raise Exception(result.get("errors"))
         elif "body" in result:
-            result = result["body"]
+            result = result.get("body")
+
+            if isinstance(result, str):
+                result = Serializer.json_loads(result)
 
         if "data" in result:
-            return result["data"]
+            return result.get("data")
 
         print(f"{'*' * 30} invoke_funct_on_aws_lambda start {'*' * 30}")
         print(Serializer.json_dumps(result))
