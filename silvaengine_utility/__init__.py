@@ -40,8 +40,9 @@ __all__ = [
     "HybridCacheEngine",
     "hybrid_cache",
     "method_cache",
-    "SettingsQueueManager",
-    "settings_queue_producer",
+    "performance_monitor",
+    "set_performance_log_threshold",
+    "get_performance_log_threshold",
 ]
 
 from .authorizer import Authorizer
@@ -63,7 +64,11 @@ from .graphql import JSON, Graphql
 from .http import HttpResponse
 from .invoker import Invoker
 from .json_handler import HighPerformanceJSONHandler, JSONHandler
-from .performance_monitor import performance_monitor
+from .performance_monitor import (
+    get_performance_log_threshold,
+    performance_monitor,
+    set_performance_log_threshold,
+)
 from .serializer import Serializer
 from .utility import Struct, Utility
 

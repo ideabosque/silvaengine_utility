@@ -261,7 +261,6 @@ class Invoker(object):
         task_queue: boto3.resource = None,
     ) -> Any:
         logger = context.get("logger")
-
         endpoint_id = context.get("endpoint_id")
         part_id = context.get("part_id")
         setting = context.get("setting", {})
@@ -332,9 +331,5 @@ class Invoker(object):
 
         if "data" in result:
             return result.get("data")
-
-        print(f"{'*' * 30} invoke_funct_on_aws_lambda start {'*' * 30}")
-        print(Serializer.json_dumps(result))
-        print(f"{'*' * 31} invoke_funct_on_aws_lambda end {'*' * 31}")
 
         return result
