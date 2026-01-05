@@ -209,6 +209,10 @@ class Graphql(object):
             if type(schema) is not dict:
                 schema = Serializer.json_loads(schema).get("body", {})
 
+            print(
+                f"Schema {'~' * 60} {type(schema)} {bool('data' in schema)} {bool('__schema' in schema)}"
+            )
+
             if "data" in schema:
                 schema = schema.get("data")
 
