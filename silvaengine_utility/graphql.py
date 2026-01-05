@@ -96,11 +96,11 @@ def graphql_service_initialization(func: Callable) -> Callable:
                     "endpoint_id", str(kwargs.get("endpoint_id")).strip().lower()
                 )
 
-            if logger:
+            if logger and hasattr(logger, "info"):
                 logger.info("Decorator `graphql_service_initialization` completed.")
             return func(self, logger, **kwargs)
         except Exception as e:
-            if logger:
+            if logger and hasattr(logger, "info"):
                 logger.info(
                     f"Decorator `graphql_service_initialization` exception: {e}"
                 )
@@ -205,11 +205,12 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if schema and "data" in schema:
-            schema = schema.get("data")
+        if schema and type(schema) is dict:
+            if "data" in schema:
+                schema = schema.get("data")
 
-        if schema and "__schema" in schema:
-            return schema.get("__schema")
+            if "__schema" in schema:
+                return schema.get("__schema")
 
         return schema if schema is not None else {}
 
