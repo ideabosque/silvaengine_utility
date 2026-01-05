@@ -323,9 +323,6 @@ class Graphql(object):
                 f"{operation_type.capitalize()} '{operation_name}' not found in the schema."
             )
 
-        print(f"schema {'>' * 68} {schema}")
-        print(f"operation_name {'>' * 60} {schema}")
-        print(f"operation_type {'>' * 60} {schema}")
         operation_details = extract_operation_details(
             schema, operation_name, operation_type
         )
@@ -334,10 +331,11 @@ class Graphql(object):
             f"${arg['name']}: {format_type(arg['type'])}" for arg in args
         )
         argument_usage = ", ".join(f"{arg['name']}: ${arg['name']}" for arg in args)
-
         return_type = operation_details["type"]
+
         if return_type["kind"] == "NON_NULL":
             return_type = return_type["ofType"]
+
         field_string = (
             Graphql.generate_field_subselection(schema, return_type["name"])
             if return_type["kind"] == "OBJECT"
@@ -346,6 +344,7 @@ class Graphql(object):
 
         if not variable_definitions and not argument_usage and not field_string:
             return f"""{operation_type.lower()} {operation_name} {{{operation_name}}}"""
+
         return f"""
         {operation_type.lower()} {operation_name}({variable_definitions}) {{
             {operation_name}({argument_usage}) {{
