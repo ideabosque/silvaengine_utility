@@ -147,14 +147,20 @@ class Graphql(object):
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
+                self.logger.info(f"Execute Graphql (run) {'>' * 40}")
                 execution_result = asyncio.run(result)
+                self.logger.info(f"Execute Graphql (run) {'>' * 40} {execution_result}")
             else:
-                self.logger.info(f"Execute Graphql {'>' * 40}")
+                self.logger.info(
+                    f"Execute Graphql (run_coroutine_threadsafe) {'>' * 40}"
+                )
                 execution_result = asyncio.run_coroutine_threadsafe(
                     result, loop
                 ).result()
 
-                self.logger.info(f"Execute Graphql {'>' * 40} {execution_result}")
+                self.logger.info(
+                    f"Execute Graphql (run_coroutine_threadsafe) {'>' * 40} {execution_result}"
+                )
 
             if execution_result:
                 if execution_result.data:
