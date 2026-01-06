@@ -136,15 +136,14 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response("Invalid operations.")
 
-            async def execute_async():
-                return schema.execute_async(
+            execution_result = asyncio.run(
+                schema.execute_async(
                     query,
                     context_value=context,
                     variable_values=params.get("variables", {}),
                     operation_name=params.get("operation_name"),
                 )
-
-            execution_result = Invoker.call_by_async(execute_async)
+            )
 
             if execution_result:
                 if execution_result.data:
