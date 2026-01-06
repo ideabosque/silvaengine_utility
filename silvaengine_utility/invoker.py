@@ -125,7 +125,7 @@ class Invoker(object):
     @staticmethod
     def sync_call_async_compatible(coro):
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(coro)
         else:

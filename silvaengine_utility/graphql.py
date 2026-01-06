@@ -157,8 +157,7 @@ class Graphql(object):
                 #     result, loop
                 # ).result(timeout=3.0)
 
-                execution_result = loop.run_until_complete(result)
-                loop.close()
+                execution_result = Invoker.sync_call_async_compatible(result)
 
                 self.logger.info(
                     f"Execute Graphql (run_coroutine_threadsafe) {'>' * 40} {execution_result}"
