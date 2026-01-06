@@ -174,15 +174,19 @@ class Graphql(object):
         variables: dict[str, Any] = {},
         aws_lambda: boto3.client = None,
     ) -> dict[str, Any]:
-        params = {
-            "query": query,
-            "variables": variables,
-            **context,
-        }
+        exclude = ["logger", "setting"]
+
+        for k in exclude:
+            context.pop(k)
+
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,
-            params=params,
+            params={
+                "query": query,
+                "variables": variables,
+                **context,
+            },
             aws_lambda=aws_lambda,
         )
 
