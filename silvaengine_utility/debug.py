@@ -17,10 +17,8 @@ class Debug(object):
             fn = info.context.get("logger").info
 
         if bool(info.get("context", {}).get("debug_mode", True)):
-            fn(
-                f"{'-' * delimiter_total} START: {str(delimiter_title).strip()} {'-' * delimiter_total}"
-            )
+            t = f"{'-' * delimiter_total} {{mark}}: {str(delimiter_title).strip()} {'-' * delimiter_total}"
+
+            fn(t.format(mark="START"))
             fn(variable)
-            fn(
-                f"{'-' * (delimiter_total + 1)} END: {str(delimiter_title).strip()} {'-' * (delimiter_total + 1)}"
-            )
+            fn(t.format(mark="END"))
