@@ -136,12 +136,14 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response("Invalid operations.")
 
-            execution_result = Graphql.execute_sync(
-                schema,
-                query,
-                context_value=context,
-                variable_values=params.get("variables", {}),
-                operation_name=params.get("operation_name"),
+            execution_result = asyncio.run(
+                schema.execute_async(
+                    schema,
+                    query,
+                    context_value=context,
+                    variable_values=params.get("variables", {}),
+                    operation_name=params.get("operation_name"),
+                )
             )
 
             if execution_result:
@@ -155,43 +157,6 @@ class Graphql(object):
             return Graphql.error_response("Uncaught execution error.", 500)
         except Exception as e:
             return Graphql.error_response(str(e), 500)
-
-    @staticmethod
-    def execute_sync(
-        schema: Schema,
-        query: str,
-        context_value: Dict[str, Any],
-        variable_values: Dict[str, Any] = {},
-        operation_name: Optional[str] = None,
-    ) -> Any:
-        """
-        Execute GraphQL query synchronously, handling different event loop states.
-
-        This method detects the current asyncio context and chooses the appropriate
-        execution strategy:
-        - If inside a running event loop: use await with existing loop
-        - If no event loop: use asyncio.run() to create a new one
-
-        Args:
-            schema: The GraphQL schema to execute against
-            query: The GraphQL query string
-            context_value: Context dictionary for the resolver
-            variable_values: Optional variables for the query
-            operation_name: Optional name of the operation to execute
-
-        Returns:
-            ExecutionResult from the GraphQL schema
-        """
-
-        async def do_execute():
-            return schema.execute_async(
-                query,
-                context_value=context_value,
-                variable_values=variable_values,
-                operation_name=operation_name,
-            )
-
-        return Invoker.call_by_async(do_execute)
 
     @staticmethod
     def success_response(data: Any) -> dict[str, Any]:
