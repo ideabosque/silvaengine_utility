@@ -155,7 +155,7 @@ class Graphql(object):
                 )
                 execution_result = asyncio.run_coroutine_threadsafe(
                     result, loop
-                ).result()
+                ).result(timeout=3.0)
 
                 self.logger.info(
                     f"Execute Graphql (run_coroutine_threadsafe) {'>' * 40} {execution_result}"
