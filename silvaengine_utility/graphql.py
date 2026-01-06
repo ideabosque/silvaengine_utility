@@ -136,7 +136,7 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response("Invalid operations.")
 
-            execution_result = asyncio.run(
+            execution_result = Invoker.sync_call_async_compatible(
                 schema.execute_async(
                     schema,
                     query,

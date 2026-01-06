@@ -4,9 +4,11 @@ from __future__ import print_function
 
 import asyncio
 import logging
+import threading
 import traceback
 from importlib import import_module
 from importlib.util import find_spec
+from queue import Queue
 from types import CoroutineType, FunctionType
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -112,6 +114,33 @@ class Invoker(object):
             raise AttributeError(
                 f"Function '{function_name}' not found in target object: {e}"
             )
+
+    @staticmethod
+    def _run_async_in_new_thread(coro, result_queue):
+        try:
+            result_queue.put(asyncio.run(coro))
+        except Exception as e:
+            result_queue.put(e)
+
+    @staticmethod
+    def sync_call_async_compatible(coro):
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        else:
+            result_queue = Queue()
+            thread = threading.Thread(
+                target=Invoker._run_async_in_new_thread, args=(coro, result_queue)
+            )
+            thread.start()
+            thread.join()
+
+            result = result_queue.get()
+
+            if isinstance(result, Exception):
+                raise result
+            return result
 
     # Call function by async
     @staticmethod
