@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import asyncio
 import functools
 import logging
 from typing import Any, Callable, Dict, Optional, Union
