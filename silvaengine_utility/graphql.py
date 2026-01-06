@@ -314,10 +314,16 @@ class Graphql(object):
             "status" in result
             and str(result.get("status")).strip().startswith("20")
             and "body" in result
-            and "data" in result.get("body")
-            and graphql_operation_name in result.get("body", {}).get("data", {})
         ):
-            return result.get("body", {}).get("data", {}).get(graphql_operation_name)
+            if type(result.get("body")) is str:
+                result = Serializer.json_loads(result.get("body"))
+
+                if "data" in result and graphql_operation_name in result.get("data"):
+                    return result.get("data").get(graphql_operation_name)
+
+                return result
+            elif type(result.get("body")) is dict:
+                return result.get("body")
 
         # Normalize GraphQL response to ensure consistent structure
         return result
