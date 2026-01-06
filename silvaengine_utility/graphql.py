@@ -185,7 +185,7 @@ class Graphql(object):
             params={
                 "query": query,
                 "variables": variables,
-                **context,
+                # **context,
             },
             aws_lambda=aws_lambda,
         )
