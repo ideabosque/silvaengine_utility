@@ -18,44 +18,101 @@ from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
 
-INTROSPECTION_QUERY = """
-query IntrospectionQuery {
+INTROSPECTION_QUERY = INTROSPECTION_QUERY = """
+  query IntrospectionQuery {
     __schema {
-        queryType { name }
-        mutationType { name }
-        subscriptionType { name }
-        types {
+      queryType { name }
+      mutationType { name }
+      subscriptionType { name }
+      types {
+        ...FullType
+      }
+      directives {
+        name
+        description
+        locations
+        args {
+          ...InputValue
+        }
+      }
+    }
+  }
+
+  fragment FullType on __Type {
+    kind
+    name
+    description
+    fields(includeDeprecated: true) {
+      name
+      description
+      args {
+        ...InputValue
+      }
+      type {
+        ...TypeRef
+      }
+      isDeprecated
+      deprecationReason
+    }
+    inputFields {
+      ...InputValue
+    }
+    interfaces {
+      ...TypeRef
+    }
+    enumValues(includeDeprecated: true) {
+      name
+      description
+      isDeprecated
+      deprecationReason
+    }
+    possibleTypes {
+      ...TypeRef
+    }
+  }
+
+  fragment InputValue on __InputValue {
+    name
+    description
+    type {
+      ...TypeRef
+    }
+    defaultValue
+  }
+
+  fragment TypeRef on __Type {
+    kind
+    name
+    ofType {
+      kind
+      name
+      ofType {
+        kind
+        name
+        ofType {
+          kind
+          name
+          ofType {
             kind
             name
-            fields {
+            ofType {
+              kind
+              name
+              ofType {
+                kind
                 name
-                args {
-                    name
-                    type {
-                        name
-                        kind
-                        ofType {
-                            name
-                            kind
-                            ofType {
-                                name
-                                kind
-                            }
-                        }
-                    }
+                ofType {
+                  kind
+                  name
                 }
-                type {
-                    name
-                    kind
-                    ofType {
-                        name
-                        kind
-                    }
-                }
+              }
             }
+          }
         }
+      }
     }
-}"""
+  }
+"""
 
 
 def graphql_service_initialization(func: Callable) -> Callable:
@@ -257,11 +314,13 @@ class Graphql(object):
         module_name: str,
         class_name: str | None = None,
     ) -> dict[str, Any]:
-        schema = Invoker.import_dynamically(
+        schema_object = Invoker.import_dynamically(
             module_name=module_name,
             class_name=class_name,
             function_name="build_graphql_schema",
         )()
+
+        schema = schema_object.execute(INTROSPECTION_QUERY)
 
         if type(schema) is dict and "__schema" in schema:
             return schema.get("__schema")
