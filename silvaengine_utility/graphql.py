@@ -184,7 +184,7 @@ class Graphql(object):
         """
 
         async def do_execute():
-            return await schema.execute_async(
+            return schema.execute_async(
                 query,
                 context_value=context_value,
                 variable_values=variable_values,
