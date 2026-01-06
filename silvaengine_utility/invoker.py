@@ -7,7 +7,7 @@ import logging
 import traceback
 from importlib import import_module
 from importlib.util import find_spec
-from types import FunctionType
+from types import CoroutineType, FunctionType
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
@@ -115,25 +115,18 @@ class Invoker(object):
 
     # Call function by async
     @staticmethod
-    def call_by_async(callables: Union[List[Callable], Callable]) -> Any:
+    def call_by_async(function: Callable) -> Any:
         try:
-
-            async def exec_async_functions(
-                callables: Union[List[Callable], Callable],
-            ) -> Any:
-                if isinstance(callables, list) and callables:
-                    return await asyncio.gather(
-                        *[
-                            fn() if callable(fn) else asyncio.sleep(0)
-                            for fn in callables
-                        ]
-                    )
-                elif callable(callables):
-                    return await callables()
-
-            return asyncio.run(exec_async_functions(callables))
-        except Exception as e:
-            raise e
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(function())
+            loop.close()
+            return result
+        else:
+            task = loop.create_task(function())
+            return task
 
     @staticmethod
     def _invoke_funct_on_local(
@@ -175,6 +168,11 @@ class Invoker(object):
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
+        print("=" * 80)
+        print(f"function_name: {function_name}")
+        print(f"invocation_type: {invocation_type}")
+        print(f"payload: {payload}")
+        print("=" * 80)
 
         response = aws_lambda.invoke(
             FunctionName=function_name,
