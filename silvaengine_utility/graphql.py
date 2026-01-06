@@ -219,7 +219,7 @@ class Graphql(object):
     def request_graphql(
         context: dict[str, Any],
         module_name: str,
-        funciotn_name: str,
+        function_name: str,
         graphql_operation_type: str,
         graphql_operation_name: str,
         class_name: str | None = None,
@@ -238,7 +238,7 @@ class Graphql(object):
 
         result = Invoker.import_dynamically(
             module_name=module_name,
-            function_name=funciotn_name,
+            function_name=function_name,
             class_name=class_name,
             constructor_parameters=context,
         )(
