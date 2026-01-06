@@ -306,8 +306,18 @@ class Graphql(object):
             }
         )
 
+        result = Serializer.json_loads(result)
+
+        if (
+            "status" in result
+            and str(result.get("status")).strip().startswith("20")
+            and "body" in result
+            and "data" in result.get("body")
+        ):
+            return result.get("body", {}).get("data")
+
         # Normalize GraphQL response to ensure consistent structure
-        return Graphql.normalize_graphql_response(result)
+        return result
 
     @staticmethod
     def get_graphql_schema(
