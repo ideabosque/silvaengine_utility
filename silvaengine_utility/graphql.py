@@ -311,8 +311,8 @@ class Graphql(object):
         )
 
         if (
-            "status" in result
-            and str(result.get("status")).strip().startswith("20")
+            "status_code" in result
+            and str(result.get("status_code")).strip().startswith("20")
             and "body" in result
         ):
             if type(result.get("body")) is str:
