@@ -146,12 +146,13 @@ class Graphql(object):
             )
 
             if execution_result:
-                if execution_result.data:
-                    return Graphql.success_response(execution_result.data)
-                elif execution_result.errors:
+                # Check for errors first - GraphQL can have both data and errors
+                if execution_result.errors:
                     return Graphql.error_response(
                         [Utility.format_error(e) for e in execution_result.errors], 500
                     )
+                elif execution_result.data:
+                    return Graphql.success_response(execution_result.data)
 
             return Graphql.error_response("Uncaught execution error.", 500)
         except Exception as e:

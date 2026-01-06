@@ -266,6 +266,12 @@ class Invoker(object):
 
             result = Serializer.json_loads(result["body"])
 
+            # Extract data portion to be consistent with AWS Lambda execution path
+            if "errors" in result:
+                raise Exception(result.get("errors"))
+            elif "data" in result:
+                return result.get("data")
+
             return result
         except Exception as e:
             log = traceback.format_exc()
@@ -290,9 +296,14 @@ class Invoker(object):
 
         if execute_mode:
             if execute_mode == "local_for_all":
-                return Invoker.invoke_funct_on_local(logger, setting, funct, **params)
+                # Remove context keys that shouldn't be passed to the local function
+                # (logger, setting are positional args; endpoint_id, part_id are handled separately)
+                local_params = {k: v for k, v in params.items() if k not in ["logger", "setting", "endpoint_id", "part_id"]}
+                return Invoker.invoke_funct_on_local(logger, setting, funct, **local_params)
             if execute_mode == "local_for_sqs" and not message_group_id:
-                return Invoker.invoke_funct_on_local(logger, setting, funct, **params)
+                # Remove context keys that shouldn't be passed to the local function
+                local_params = {k: v for k, v in params.items() if k not in ["logger", "setting", "endpoint_id", "part_id"]}
+                return Invoker.invoke_funct_on_local(logger, setting, funct, **local_params)
             if execute_mode == "local_for_aws_lambda" and task_queue is None:
                 pass
 
