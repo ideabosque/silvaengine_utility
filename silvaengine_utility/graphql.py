@@ -182,6 +182,7 @@ class Graphql(object):
         Returns:
             ExecutionResult from the GraphQL schema
         """
+
         async def do_execute():
             return await schema.execute_async(
                 query,
@@ -190,14 +191,7 @@ class Graphql(object):
                 operation_name=operation_name,
             )
 
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                return loop.run_until_complete(do_execute())
-        except RuntimeError:
-            pass
-
-        return asyncio.run(do_execute())
+        return Invoker.call_by_async(do_execute)
 
     @staticmethod
     def success_response(data: Any) -> dict[str, Any]:
