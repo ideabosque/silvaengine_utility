@@ -136,32 +136,14 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response("Invalid operations.")
 
-            result = schema.execute_async(
-                query,
-                context_value=context,
-                variable_values=params.get("variables", {}),
-                operation_name=params.get("operation_name"),
+            execution_result = Invoker.sync_call_async_compatible(
+                schema.execute_async(
+                    query,
+                    context_value=context,
+                    variable_values=params.get("variables", {}),
+                    operation_name=params.get("operation_name"),
+                )
             )
-
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                self.logger.info(f"Execute Graphql (run) {'>' * 40}")
-                execution_result = asyncio.run(result)
-                self.logger.info(f"Execute Graphql (run) {'>' * 40} {execution_result}")
-            else:
-                self.logger.info(
-                    f"Execute Graphql (run_coroutine_threadsafe) {'>' * 40}"
-                )
-                # execution_result = asyncio.run_coroutine_threadsafe(
-                #     result, loop
-                # ).result(timeout=3.0)
-
-                execution_result = Invoker.sync_call_async_compatible(result)
-
-                self.logger.info(
-                    f"Execute Graphql (run_coroutine_threadsafe) {'>' * 40} {execution_result}"
-                )
 
             if execution_result:
                 if execution_result.data:
