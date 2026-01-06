@@ -310,22 +310,32 @@ class Graphql(object):
             }
         )
 
+        print(f"1. {'=' * 40} {type(result)} {result}")
+
         if (
             "status_code" in result
             and str(result.get("status_code")).strip().startswith("20")
             and "body" in result
         ):
+            print(f"2. {'=' * 40} {type(result.get('body'))} {result.get('body')}")
+
             if type(result.get("body")) is str:
                 result = Serializer.json_loads(result.get("body"))
+                print(f"3. {'=' * 40} {type(result)} {result}")
 
                 if "data" in result and graphql_operation_name in result.get("data"):
+                    print(
+                        f"4. {'=' * 40} {type(result.get('data').get(graphql_operation_name))} {result.get('data').get(graphql_operation_name)}"
+                    )
                     return result.get("data").get(graphql_operation_name)
 
                 return result
             elif type(result.get("body")) is dict:
+                print(f"5. {'=' * 40} {type(result.get('body'))} {result.get('body')}")
+
                 return result.get("body")
 
-        # Normalize GraphQL response to ensure consistent structure
+        print(f"6. {'=' * 40} {type(result)} {result}")
         return result
 
     @staticmethod
