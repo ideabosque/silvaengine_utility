@@ -282,6 +282,10 @@ class Graphql(object):
         class_name: str | None = None,
         variables: dict[str, Any] = {},
     ) -> dict[str, Any]:
+        module_name = str(module_name).strip()
+        function_name = str(function_name).strip()
+        graphql_operation_type = str(graphql_operation_type).strip()
+        graphql_operation_name = str(graphql_operation_name).strip()
         schema = Graphql.get_graphql_schema(
             module_name=module_name,
             class_name=class_name,
@@ -313,8 +317,9 @@ class Graphql(object):
             and str(result.get("status")).strip().startswith("20")
             and "body" in result
             and "data" in result.get("body")
+            and graphql_operation_name in result.get("body", {}).get("data", {})
         ):
-            return result.get("body", {}).get("data")
+            return result.get("body", {}).get("data", {}).get(graphql_operation_name)
 
         # Normalize GraphQL response to ensure consistent structure
         return result
