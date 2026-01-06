@@ -8,6 +8,7 @@ __all__ = [
     "graphql",
     "authorizer",
     "serializer",
+    "debug",
     "invoker",
     "database",
     "context",
@@ -35,6 +36,7 @@ __all__ = [
     "Authorizer",
     "HttpResponse",
     "Database",
+    "Debug",
     "JSON",
     "Utility",
     "Struct",
@@ -60,6 +62,7 @@ from .datetime_handler import (
     parse_datetime,
     parse_datetime_in_json,
 )
+from .debug import Debug
 from .graphql import JSON, Graphql
 from .http import HttpResponse
 from .invoker import Invoker

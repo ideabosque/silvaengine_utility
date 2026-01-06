@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import asyncio
 import functools
 import logging
 from typing import Any, Callable, Dict, Optional, Union
@@ -19,44 +18,101 @@ from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
 
-INTROSPECTION_QUERY = """
-query IntrospectionQuery {
+INTROSPECTION_QUERY = INTROSPECTION_QUERY = """
+  query IntrospectionQuery {
     __schema {
-        queryType { name }
-        mutationType { name }
-        subscriptionType { name }
-        types {
+      queryType { name }
+      mutationType { name }
+      subscriptionType { name }
+      types {
+        ...FullType
+      }
+      directives {
+        name
+        description
+        locations
+        args {
+          ...InputValue
+        }
+      }
+    }
+  }
+
+  fragment FullType on __Type {
+    kind
+    name
+    description
+    fields(includeDeprecated: true) {
+      name
+      description
+      args {
+        ...InputValue
+      }
+      type {
+        ...TypeRef
+      }
+      isDeprecated
+      deprecationReason
+    }
+    inputFields {
+      ...InputValue
+    }
+    interfaces {
+      ...TypeRef
+    }
+    enumValues(includeDeprecated: true) {
+      name
+      description
+      isDeprecated
+      deprecationReason
+    }
+    possibleTypes {
+      ...TypeRef
+    }
+  }
+
+  fragment InputValue on __InputValue {
+    name
+    description
+    type {
+      ...TypeRef
+    }
+    defaultValue
+  }
+
+  fragment TypeRef on __Type {
+    kind
+    name
+    ofType {
+      kind
+      name
+      ofType {
+        kind
+        name
+        ofType {
+          kind
+          name
+          ofType {
             kind
             name
-            fields {
+            ofType {
+              kind
+              name
+              ofType {
+                kind
                 name
-                args {
-                    name
-                    type {
-                        name
-                        kind
-                        ofType {
-                            name
-                            kind
-                            ofType {
-                                name
-                                kind
-                            }
-                        }
-                    }
+                ofType {
+                  kind
+                  name
                 }
-                type {
-                    name
-                    kind
-                    ofType {
-                        name
-                        kind
-                    }
-                }
+              }
             }
+          }
         }
+      }
     }
-}"""
+  }
+"""
 
 
 def graphql_service_initialization(func: Callable) -> Callable:
@@ -176,15 +232,19 @@ class Graphql(object):
         variables: dict[str, Any] = {},
         aws_lambda: boto3.client = None,
     ) -> dict[str, Any]:
-        params = {
-            "query": query,
-            "variables": variables,
-            **context,
-        }
+        # exclude = ["logger", "setting"]
+
+        # for k in exclude:
+        #     context.pop(k)
+
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,
-            params=params,
+            params={
+                "query": query,
+                "variables": variables,
+                **context,
+            },
             aws_lambda=aws_lambda,
         )
 
@@ -212,6 +272,84 @@ class Graphql(object):
                 return schema.get("__schema")
 
         return schema if schema is not None else {}
+
+    @staticmethod
+    def request_graphql(
+        context: dict[str, Any],
+        module_name: str,
+        function_name: str,
+        graphql_operation_type: str,
+        graphql_operation_name: str,
+        class_name: str | None = None,
+        variables: dict[str, Any] = {},
+    ) -> dict[str, Any]:
+        module_name = str(module_name).strip()
+        function_name = str(function_name).strip()
+        graphql_operation_type = str(graphql_operation_type).strip()
+        graphql_operation_name = str(graphql_operation_name).strip()
+        schema = Graphql.get_graphql_schema(
+            module_name=module_name,
+            class_name=class_name,
+        )
+
+        query = Graphql.generate_graphql_operation(
+            operation_name=graphql_operation_name,
+            operation_type=graphql_operation_type,
+            schema=schema,
+        )
+
+        result = Invoker.import_dynamically(
+            module_name=module_name,
+            function_name=function_name,
+            class_name=class_name,
+            constructor_parameters=context,
+        )(
+            **{
+                "query": query,
+                "variables": variables,
+                "context": context,
+            }
+        )
+
+        if (
+            "statusCode" in result
+            and str(result.get("statusCode")).strip().startswith("20")
+            and "body" in result
+        ):
+            if type(result.get("body")) is str:
+                result = Serializer.json_loads(result.get("body"))
+
+                if "data" in result and graphql_operation_name in result.get("data"):
+                    return result.get("data").get(graphql_operation_name)
+
+                return result
+            elif type(result.get("body")) is dict:
+                return result.get("body")
+
+        return result
+
+    @staticmethod
+    def get_graphql_schema(
+        module_name: str,
+        class_name: str | None = None,
+    ) -> dict[str, Any]:
+        schema_object = Invoker.import_dynamically(
+            module_name=module_name,
+            class_name=class_name,
+            function_name="build_graphql_schema",
+        )()
+
+        result = schema_object.execute(INTROSPECTION_QUERY)
+
+        if result.errors:
+            raise Exception(f"Introspection query error: {result.errors}")
+
+        schema = result.data if result.data is not None else {}
+
+        if type(schema) is dict and "__schema" in schema:
+            return schema.get("__schema")
+
+        return schema
 
     @staticmethod
     def extract_available_fields(
