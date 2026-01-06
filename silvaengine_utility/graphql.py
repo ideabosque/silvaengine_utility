@@ -137,7 +137,6 @@ class Graphql(object):
                 return Graphql.error_response("Invalid operations.")
 
             result = schema.execute_async(
-                schema,
                 query,
                 context_value=context,
                 variable_values=params.get("variables", {}),
