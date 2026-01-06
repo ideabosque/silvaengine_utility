@@ -185,7 +185,7 @@ class Graphql(object):
             params={
                 "query": query,
                 "variables": variables,
-                # **context,
+                **context,
             },
             aws_lambda=aws_lambda,
         )
@@ -212,6 +212,59 @@ class Graphql(object):
 
             if "__schema" in schema:
                 return schema.get("__schema")
+
+        return schema if schema is not None else {}
+
+    @staticmethod
+    def request_graphql(
+        context: dict[str, Any],
+        module_name: str,
+        funciotn_name: str,
+        graphql_operation_type: str,
+        graphql_operation_name: str,
+        class_name: str | None = None,
+        variables: dict[str, Any] = {},
+    ) -> dict[str, Any]:
+        schema = Graphql.get_graphql_schema(
+            module_name=module_name,
+            class_name=class_name,
+        )
+
+        query = Graphql.generate_graphql_operation(
+            operation_name=graphql_operation_name,
+            operation_type=graphql_operation_type,
+            schema=schema,
+        )
+
+        result = Invoker.import_dynamically(
+            module_name=module_name,
+            function_name=funciotn_name,
+            class_name=class_name,
+            constructor_parameters=context,
+        )(
+            **{
+                "query": query,
+                "variables": variables,
+                "context": context,
+            }
+        )
+
+        # Normalize GraphQL response to ensure consistent structure
+        return Graphql.normalize_graphql_response(result)
+
+    @staticmethod
+    def get_graphql_schema(
+        module_name: str,
+        class_name: str | None = None,
+    ) -> dict[str, Any]:
+        schema = Invoker.import_dynamically(
+            module_name=module_name,
+            class_name=class_name,
+            function_name="build_graphql_schema",
+        )()
+
+        if type(schema) is dict and "__schema" in schema:
+            return schema.get("__schema")
 
         return schema if schema is not None else {}
 
