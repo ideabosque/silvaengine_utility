@@ -310,8 +310,6 @@ class Graphql(object):
             }
         )
 
-        result = Serializer.json_loads(result)
-
         if (
             "status" in result
             and str(result.get("status")).strip().startswith("20")
