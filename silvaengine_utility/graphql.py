@@ -320,12 +320,17 @@ class Graphql(object):
             function_name="build_graphql_schema",
         )()
 
-        schema = schema_object.execute(INTROSPECTION_QUERY)
+        result = schema_object.execute(INTROSPECTION_QUERY)
+
+        if result.errors:
+            raise Exception(f"Introspection query error: {result.errors}")
+
+        schema = result.data if result.data is not None else {}
 
         if type(schema) is dict and "__schema" in schema:
             return schema.get("__schema")
 
-        return schema if schema is not None else {}
+        return schema
 
     @staticmethod
     def extract_available_fields(
