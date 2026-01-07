@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 import logging
+from os import error
 from typing import Any, Callable, Dict, Optional, Union
 
 import boto3
@@ -283,50 +284,68 @@ class Graphql(object):
         class_name: str | None = None,
         variables: dict[str, Any] = {},
     ) -> dict[str, Any]:
-        module_name = str(module_name).strip()
-        function_name = str(function_name).strip()
-        graphql_operation_type = str(graphql_operation_type).strip()
-        graphql_operation_name = str(graphql_operation_name).strip()
-        schema = Graphql.get_graphql_schema(
-            module_name=module_name,
-            class_name=class_name,
-        )
+        try:
+            module_name = str(module_name).strip()
+            function_name = str(function_name).strip()
+            graphql_operation_type = str(graphql_operation_type).strip()
+            graphql_operation_name = str(graphql_operation_name).strip()
 
-        query = Graphql.generate_graphql_operation(
-            operation_name=graphql_operation_name,
-            operation_type=graphql_operation_type,
-            schema=schema,
-        )
+            if (
+                not module_name
+                or not function_name
+                or not graphql_operation_name
+                or not graphql_operation_type
+            ):
+                raise Exception("Missing required parameter(s)")
 
-        result = Invoker.import_dynamically(
-            module_name=module_name,
-            function_name=function_name,
-            class_name=class_name,
-            constructor_parameters=context,
-        )(
-            **{
-                "query": query,
-                "variables": variables,
-                "context": context,
-            }
-        )
+            schema = Graphql.get_graphql_schema(
+                module_name=module_name,
+                class_name=class_name,
+            )
 
-        if (
-            "statusCode" in result
-            and str(result.get("statusCode")).strip().startswith("20")
-            and "body" in result
-        ):
-            if type(result.get("body")) is str:
-                result = Serializer.json_loads(result.get("body"))
+            query = Graphql.generate_graphql_operation(
+                operation_name=graphql_operation_name,
+                operation_type=graphql_operation_type,
+                schema=schema,
+            )
 
-                if "data" in result and graphql_operation_name in result.get("data"):
-                    return result.get("data").get(graphql_operation_name)
+            result = Invoker.import_dynamically(
+                module_name=module_name,
+                function_name=function_name,
+                class_name=class_name,
+                constructor_parameters=context,
+            )(
+                **{
+                    "query": query,
+                    "variables": variables,
+                    "context": context,
+                }
+            )
 
-                return result
-            elif type(result.get("body")) is dict:
-                return result.get("body")
+            if (
+                type(result) is not dict
+                or "statusCode" not in result
+                or "body" not in result
+            ):
+                raise Exception(f"Invalid response structure: {result}")
 
-        return result
+            status_code = str(result.get("statusCode")).strip()
+            result = result.get("body")
+
+            if not result:
+                return {}
+            elif type(result) is str:
+                result = Serializer.json_loads(result)
+
+            if not status_code.startswith("20") and "errors" in result:
+                raise Exception(f"Request graphql error: {result.get('errors')}")
+            elif graphql_operation_name in result.get("data", {}):
+                return result.get("data").get(graphql_operation_name)
+            else:
+                raise Exception(f"Invalid response: {result.get('data')}")
+
+        except Exception as e:
+            raise e
 
     @staticmethod
     def get_graphql_schema(
