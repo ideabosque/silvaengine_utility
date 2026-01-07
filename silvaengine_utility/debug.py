@@ -2,18 +2,32 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
+import logging
+from typing import Any, Dict, Optional
+
 
 class Debug(object):
     @staticmethod
-    def info(info, variable, delimiter_title="", delimiter="-", delimiter_total=40):
-        fn = print
-        is_valid_info = info and hasattr(info, "context") and "logger" in info.context
+    def info(
+        variable: Any,
+        stage: str = "",
+        delimiter: str = "-",
+        delimiter_repetitions: int = 40,
+        setting: Dict[str, Any] = {},
+        logger: Optional[logging.Logger] = None,
+    ):
+        fn = logger.info if isinstance(logger, logging.Logger) else print
+        is_debug_mode = (
+            setting.get("debug_model", True) if type(setting) is dict else True
+        )
+        delimiter_repetitions = (
+            int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 40
+        )
+        delimiter = str(delimiter).strip() if str(delimiter).strip() else "-"
+        stage = str(stage).strip()
 
-        if is_valid_info and hasattr(info.context.get("logger"), "info"):
-            fn = info.context.get("logger").info
-
-        if not is_valid_info or bool(info.context.get("debug_mode", True)):
-            t = f"{'-' * delimiter_total} {{mark}}: {str(delimiter_title).strip()} {'-' * delimiter_total}"
+        if is_debug_mode:
+            t = f"{'-' * delimiter_repetitions} {{mark}}: {stage} {'-' * delimiter_repetitions}"
 
             fn(t.format(mark="START"))
             fn(variable)
