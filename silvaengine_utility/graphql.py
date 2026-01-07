@@ -337,12 +337,14 @@ class Graphql(object):
             elif type(result) is str:
                 result = Serializer.json_loads(result)
 
-            if not status_code.startswith("20") and "errors" in result:
+            if status_code.startswith("20"):
+                if graphql_operation_name in result.get("data", {}):
+                    return result.get("data").get(graphql_operation_name)
+                return {}
+            elif "errors" in result:
                 raise Exception(f"Request graphql error: {result.get('errors')}")
-            elif graphql_operation_name in result.get("data", {}):
-                return result.get("data").get(graphql_operation_name)
             else:
-                raise Exception(f"Invalid response: {result.get('data')}")
+                raise Exception(f"Request graphql error with status: {status_code}")
 
         except Exception as e:
             raise e
