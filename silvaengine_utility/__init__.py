@@ -45,6 +45,7 @@ __all__ = [
     "method_cache",
     "set_performance_log_threshold",
     "get_performance_log_threshold",
+    "graphene_sqlalchemy"
 ]
 
 from .authorizer import Authorizer
