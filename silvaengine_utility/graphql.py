@@ -354,23 +354,26 @@ class Graphql(object):
         module_name: str,
         class_name: str | None = None,
     ) -> dict[str, Any]:
-        schema_object = Invoker.import_dynamically(
-            module_name=module_name,
-            class_name=class_name,
-            function_name="build_graphql_schema",
-        )()
+        try:
+            schema_object = Invoker.import_dynamically(
+                module_name=module_name,
+                class_name=class_name,
+                function_name="build_graphql_schema",
+            )()
 
-        result = schema_object.execute(INTROSPECTION_QUERY)
+            result = schema_object.execute(INTROSPECTION_QUERY)
 
-        if result.errors:
-            raise Exception(f"Introspection query error: {result.errors}")
+            if result.errors:
+                raise Exception(f"Introspection query error: {result.errors}")
 
-        schema = result.data if result.data is not None else {}
+            schema = result.data if result.data is not None else {}
 
-        if type(schema) is dict and "__schema" in schema:
-            return schema.get("__schema")
+            if type(schema) is dict and "__schema" in schema:
+                return schema.get("__schema")
 
-        return schema
+            return schema
+        except Exception as e:
+            raise e
 
     @staticmethod
     def extract_available_fields(
