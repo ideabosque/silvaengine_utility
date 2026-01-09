@@ -14,7 +14,7 @@ import inspect
 from typing import Any, Callable, Dict, Optional, Union
 
 from .hybrid_cache import HybridCacheEngine, default_cache
-from .object_cache import ObjectCache
+from .object_cache import ObjectCacheEngine
 
 
 def hybrid_cache(
@@ -194,28 +194,32 @@ def object_cache(func: Callable) -> Callable:
             logger = kwargs.get("logger")
 
             try:
-                cached_object = ObjectCache.get(module_name, class_name, function_name)
+                cached_object = ObjectCacheEngine.get(
+                    module_name, class_name, function_name
+                )
 
                 if cached_object is not None:
                     if logger and hasattr(logger, "debug"):
                         logger.debug(
-                            f"ObjectCache HIT: {module_name}:{class_name}:{function_name}"
+                            f"ObjectCacheEngine HIT: {module_name}:{class_name}:{function_name}"
                         )
                     return cached_object
 
                 if logger and hasattr(logger, "debug"):
                     logger.debug(
-                        f"ObjectCache MISS: {module_name}:{class_name}:{function_name}"
+                        f"ObjectCacheEngine MISS: {module_name}:{class_name}:{function_name}"
                     )
 
                 invoker = func(*args, **kwargs)
 
                 if invoker is not None:
-                    ObjectCache.set(module_name, class_name, function_name, invoker)
+                    ObjectCacheEngine.set(
+                        module_name, class_name, function_name, invoker
+                    )
 
                     if logger and hasattr(logger, "debug"):
                         logger.debug(
-                            f"ObjectCache SET: {module_name}:{class_name}:{function_name}"
+                            f"ObjectCacheEngine SET: {module_name}:{class_name}:{function_name}"
                         )
 
                 return invoker
@@ -223,7 +227,7 @@ def object_cache(func: Callable) -> Callable:
             except Exception as e:
                 if logger and hasattr(logger, "error"):
                     logger.error(
-                        f"ObjectCache error for {module_name}:{class_name}:{function_name}: {e}"
+                        f"ObjectCacheEngine error for {module_name}:{class_name}:{function_name}: {e}"
                     )
                 raise
 
@@ -244,7 +248,7 @@ def object_cache(func: Callable) -> Callable:
                 invoker_object = invoker.__self__
                 invoker_object.__init__(**parameters)
 
-        print(f"{'*' * 40} {ObjectCache.get_stats()}")
+        print(f"{'*' * 40} {ObjectCacheEngine.get_stats()}")
         return invoker
 
     return wrapper

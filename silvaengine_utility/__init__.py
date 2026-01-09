@@ -41,7 +41,7 @@ __all__ = [
     "Utility",
     "Struct",
     "HybridCacheEngine",
-    "ObjectCache",
+    "ObjectCacheEngine",
     "hybrid_cache",
     "method_cache",
     "object_cache",
@@ -56,7 +56,7 @@ __all__ = [
 from .authorizer import Authorizer
 from .cache import (
     HybridCacheEngine,
-    ObjectCache,
+    ObjectCacheEngine,
     hybrid_cache,
     method_cache,
     object_cache,

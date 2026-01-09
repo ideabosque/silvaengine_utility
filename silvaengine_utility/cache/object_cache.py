@@ -8,7 +8,7 @@ import threading
 from typing import Any, Callable, Dict, Optional
 
 
-class ObjectCache:
+class ObjectCacheEngine:
     """
     Thread-safe object cache for dynamically imported modules and classes.
 
