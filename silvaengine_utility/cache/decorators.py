@@ -14,6 +14,7 @@ import inspect
 from typing import Any, Callable, Dict, Optional, Union
 
 from .hybrid_cache import HybridCacheEngine, default_cache
+from .object_cache import ObjectCache
 
 
 def hybrid_cache(
@@ -75,7 +76,9 @@ def hybrid_cache(
         wrapper.cache_delete = lambda *args, **kwargs: cache_engine.delete(
             cache_engine._generate_key(
                 func_prefix,
-                key_generator(*args, **kwargs) if key_generator else {"args": args, "kwargs": kwargs}
+                key_generator(*args, **kwargs)
+                if key_generator
+                else {"args": args, "kwargs": kwargs},
             )
         )
         wrapper.cache_stats = lambda: cache_engine.stats()
@@ -149,3 +152,99 @@ def method_cache(
         return ":".join(key_parts)
 
     return hybrid_cache(ttl=ttl, cache_name=cache_name, key_generator=key_gen)
+
+
+def object_cache(func: Callable) -> Callable:
+    """
+    Decorator to cache dynamically imported objects with thread safety.
+
+    This decorator wraps functions that perform dynamic imports to cache
+    the imported module/class/function, avoiding repeated import operations.
+
+    Cache key format: module_name:class_name:function_name
+    Cache has no expiration time (permanent cache).
+
+    This is a parameterless decorator - it does not accept any arguments.
+
+    Usage:
+        @object_cache
+        def import_dynamically(module_name, function_name, class_name=None, constructor_parameters=None):
+            # Your import logic here
+            return imported_object
+
+    The decorator automatically extracts cache key components from kwargs:
+    - module_name: Required, name of the module
+    - function_name: Required, name of the function/method
+    - class_name: Optional, name of the class containing the method
+
+    Returns:
+        Decorated function that uses cached objects
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> Any:
+        def get_invoker(*args, **kwargs):
+            module_name = kwargs.get("module_name", "")
+            function_name = kwargs.get("function_name", "")
+            class_name = kwargs.get("class_name")
+
+            if not module_name or not function_name:
+                raise ValueError("module_name and function_name are required")
+
+            logger = kwargs.get("logger")
+
+            try:
+                cached_object = ObjectCache.get(module_name, class_name, function_name)
+
+                if cached_object is not None:
+                    if logger and hasattr(logger, "debug"):
+                        logger.debug(
+                            f"ObjectCache HIT: {module_name}:{class_name}:{function_name}"
+                        )
+                    return cached_object
+
+                if logger and hasattr(logger, "debug"):
+                    logger.debug(
+                        f"ObjectCache MISS: {module_name}:{class_name}:{function_name}"
+                    )
+
+                invoker = func(*args, **kwargs)
+
+                if invoker is not None:
+                    ObjectCache.set(module_name, class_name, function_name, invoker)
+
+                    if logger and hasattr(logger, "debug"):
+                        logger.debug(
+                            f"ObjectCache SET: {module_name}:{class_name}:{function_name}"
+                        )
+
+                return invoker
+
+            except Exception as e:
+                if logger and hasattr(logger, "error"):
+                    logger.error(
+                        f"ObjectCache error for {module_name}:{class_name}:{function_name}: {e}"
+                    )
+                raise
+
+        invoker = get_invoker(*args, **kwargs)
+        parameters = kwargs.get("constructor_parameters")
+
+        if type(parameters) is dict:
+            is_instance_method = not (
+                inspect.isfunction(invoker)
+                or (
+                    inspect.ismethod(invoker)
+                    and hasattr(invoker, "__self__")
+                    and inspect.isclass(invoker.__self__)
+                )
+            ) and inspect.ismethod(invoker)
+
+            if is_instance_method:
+                invoker_object = invoker.__self__
+                invoker_object.__init__(**parameters)
+
+        print(f"{'*' * 40} {ObjectCache.get_stats()}")
+        return invoker
+
+    return wrapper

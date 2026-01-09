@@ -20,7 +20,15 @@ Usage:
         def get_data(self, id): ...
 """
 
-from .decorators import hybrid_cache, method_cache
+from .decorators import hybrid_cache, method_cache, object_cache
 from .hybrid_cache import HybridCacheEngine, default_cache
+from .object_cache import ObjectCache
 
-__all__ = ["HybridCacheEngine", "default_cache", "hybrid_cache", "method_cache"]
+__all__ = [
+    "HybridCacheEngine",
+    "ObjectCache",
+    "default_cache",
+    "hybrid_cache",
+    "method_cache",
+    "object_cache",
+]

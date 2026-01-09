@@ -41,18 +41,25 @@ __all__ = [
     "Utility",
     "Struct",
     "HybridCacheEngine",
+    "ObjectCache",
     "hybrid_cache",
     "method_cache",
+    "object_cache",
     "set_performance_log_threshold",
     "get_performance_log_threshold",
-    "graphene_sqlalchemy"
+    "graphene_sqlalchemy",
+    "SQLAlchemyRelayConnectionField",
+    "BaseConnection",
+    "SortInput",
 ]
 
 from .authorizer import Authorizer
 from .cache import (
     HybridCacheEngine,
+    ObjectCache,
     hybrid_cache,
     method_cache,
+    object_cache,
 )
 from .context import Context
 from .database import Database
@@ -64,6 +71,11 @@ from .datetime_handler import (
     parse_datetime_in_json,
 )
 from .debugger import Debugger
+from .graphene_sqlalchemy import (
+    BaseConnection,
+    SortInput,
+    SQLAlchemyRelayConnectionField,
+)
 from .graphql import JSON, Graphql
 from .http import HttpResponse
 from .invoker import Invoker

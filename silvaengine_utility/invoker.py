@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import asyncio
+import inspect
 import logging
 import threading
 import traceback
@@ -14,16 +15,30 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
 
+from .cache.object_cache import object_cache
 from .serializer import Serializer
 
 
 class Invoker(object):
     @staticmethod
-    def is_static_method(callable_method: Any) -> bool:
-        return callable(callable_method) and type(callable_method) is FunctionType
+    def is_static_method(method) -> bool:
+        return inspect.isfunction(method)
 
     @staticmethod
-    def import_dynamically(
+    def is_class_method(method) -> bool:
+        return (
+            inspect.ismethod(method)
+            and hasattr(method, "__self__")
+            and inspect.isclass(method.__self__)
+        )
+
+    @staticmethod
+    def is_instance_method(method) -> bool:
+        return inspect.ismethod(method)
+
+    @staticmethod
+    @object_cache
+    def resolve_proxied_callable(
         module_name: str,
         function_name: str,
         class_name: Optional[str] = None,
@@ -32,9 +47,9 @@ class Invoker(object):
         """
         Dynamically imports a module and retrieves a function or method.
 
-
-        This method loads a module dynamically, optionally instantiates a class from that module,
-        and returns a callable function or method.
+        Uses thread-safe caching to avoid repeated import operations.
+        Cache key format: module_name:class_name:function_name
+        Cache has no expiration time (permanent cache).
 
         Args:
             module_name (str): The name of the module to import.
@@ -76,36 +91,12 @@ class Invoker(object):
         if class_name:
             # Get class from module
             try:
-                cls = getattr(agent, class_name)
+                agent = getattr(agent, class_name)
+                agent = agent.__new__(agent)
             except AttributeError as e:
                 raise AttributeError(
                     f"Class '{class_name}' not found in module '{module_name}': {e}"
                 )
-
-            # Instantiate class or use class itself for static methods
-            if constructor_parameters is not None:
-                if not isinstance(constructor_parameters, dict):
-                    raise TypeError("constructor_parameters must be a dictionary")
-                agent = cls(**constructor_parameters)
-            else:
-                # Check if method is static before deciding how to get it
-                try:
-                    method = getattr(cls, function_name)
-                    if Invoker.is_static_method(method):
-                        # For static methods, we can use the class itself
-                        agent = cls
-                    else:
-                        # For instance methods, we need to instantiate the class
-                        try:
-                            agent = cls()
-                        except Exception as e:
-                            raise TypeError(
-                                f"Failed to instantiate class '{class_name}': {e}"
-                            )
-                except AttributeError as e:
-                    raise AttributeError(
-                        f"Method '{function_name}' not found in class '{class_name}': {e}"
-                    )
 
         # Get the requested function/method
         try:
@@ -298,12 +289,24 @@ class Invoker(object):
             if execute_mode == "local_for_all":
                 # Remove context keys that shouldn't be passed to the local function
                 # (logger, setting are positional args; endpoint_id, part_id are handled separately)
-                local_params = {k: v for k, v in params.items() if k not in ["logger", "setting", "endpoint_id", "part_id"]}
-                return Invoker.invoke_funct_on_local(logger, setting, funct, **local_params)
+                local_params = {
+                    k: v
+                    for k, v in params.items()
+                    if k not in ["logger", "setting", "endpoint_id", "part_id"]
+                }
+                return Invoker.invoke_funct_on_local(
+                    logger, setting, funct, **local_params
+                )
             if execute_mode == "local_for_sqs" and not message_group_id:
                 # Remove context keys that shouldn't be passed to the local function
-                local_params = {k: v for k, v in params.items() if k not in ["logger", "setting", "endpoint_id", "part_id"]}
-                return Invoker.invoke_funct_on_local(logger, setting, funct, **local_params)
+                local_params = {
+                    k: v
+                    for k, v in params.items()
+                    if k not in ["logger", "setting", "endpoint_id", "part_id"]
+                }
+                return Invoker.invoke_funct_on_local(
+                    logger, setting, funct, **local_params
+                )
             if execute_mode == "local_for_aws_lambda" and task_queue is None:
                 pass
 
