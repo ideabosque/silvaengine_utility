@@ -27,7 +27,7 @@ class Debugger(object):
         stage = str(stage).strip()
 
         if is_debug_mode:
-            t = f"{'-' * delimiter_repetitions} {{mark}}: {stage} {'-' * delimiter_repetitions}"
+            t = f"{delimiter * delimiter_repetitions} {{mark}}: {stage} {delimiter * delimiter_repetitions}"
 
             fn(t.format(mark="START"))
             fn(variable)
