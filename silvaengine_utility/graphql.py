@@ -309,7 +309,7 @@ class Graphql(object):
                 schema=schema,
             )
 
-            result = Invoker.import_dynamically(
+            result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
                 function_name=function_name,
                 class_name=class_name,
@@ -355,7 +355,7 @@ class Graphql(object):
         class_name: str | None = None,
     ) -> dict[str, Any]:
         try:
-            schema_object = Invoker.import_dynamically(
+            schema_object = Invoker.resolve_proxied_callable(
                 module_name=module_name,
                 class_name=class_name,
                 function_name="build_graphql_schema",
