@@ -231,24 +231,27 @@ def object_cache(func: Callable) -> Callable:
                     )
                 raise
 
-        invoker = get_invoker(*args, **kwargs)
-        parameters = kwargs.get("constructor_parameters")
+        try:
+            invoker = get_invoker(*args, **kwargs)
+            parameters = kwargs.get("constructor_parameters")
 
-        if type(parameters) is dict:
-            is_instance_method = not (
-                inspect.isfunction(invoker)
-                or (
-                    inspect.ismethod(invoker)
-                    and hasattr(invoker, "__self__")
-                    and inspect.isclass(invoker.__self__)
-                )
-            ) and inspect.ismethod(invoker)
+            if type(parameters) is dict:
+                is_instance_method = not (
+                    inspect.isfunction(invoker)
+                    or (
+                        inspect.ismethod(invoker)
+                        and hasattr(invoker, "__self__")
+                        and inspect.isclass(invoker.__self__)
+                    )
+                ) and inspect.ismethod(invoker)
 
-            if is_instance_method:
-                invoker_object = invoker.__self__
-                invoker_object.__init__(**parameters)
+                if is_instance_method:
+                    invoker_object = invoker.__self__
+                    invoker_object.__init__(**parameters)
 
-        print(f"{'*' * 40} {ObjectCacheEngine.get_stats()}")
-        return invoker
+            print(f"{'*' * 40} {ObjectCacheEngine.get_stats()}")
+            return invoker
+        except Exception as e:
+            raise e
 
     return wrapper

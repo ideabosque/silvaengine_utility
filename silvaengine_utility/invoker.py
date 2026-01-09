@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
 
-from .cache.object_cache import object_cache
+from .cache.decorators import object_cache
 from .serializer import Serializer
 
 
