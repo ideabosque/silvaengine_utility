@@ -4,6 +4,8 @@ from __future__ import print_function
 
 from typing import Any
 
+from silvaengine_constants import HttpStatus
+
 from .serializer import Serializer
 
 
@@ -11,7 +13,7 @@ class HttpResponse(object):
     @staticmethod
     def format_response(
         data: Any,
-        status_code: int = 200,
+        status_code: int = HttpStatus.OK.value,
         content_type: str = "application/json",
     ):
         content_type = (

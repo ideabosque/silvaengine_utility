@@ -17,7 +17,7 @@ class ObjectCacheEngine:
     """
 
     _cache: Dict[str, Any] = {}
-    _lock: threading.Lock = threading.Lock()
+    _lock: threading.RLock = threading.RLock()
 
     @classmethod
     def _generate_key(

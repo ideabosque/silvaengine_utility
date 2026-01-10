@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import functools
 import logging
-from os import error
 from typing import Any, Callable, Dict, Optional, Union
 
 import boto3
@@ -12,6 +11,7 @@ import graphene
 from graphene import Schema
 from graphql import parse
 from graphql.language import ast
+from silvaengine_constants import HttpStatus
 
 from .context import Context
 from .http import HttpResponse
@@ -206,14 +206,25 @@ class Graphql(object):
                 # Check for errors first - GraphQL can have both data and errors
                 if execution_result.errors:
                     return Graphql.error_response(
-                        [Utility.format_error(e) for e in execution_result.errors], 500
+                        [Utility.format_error(e) for e in execution_result.errors],
+                        HttpStatus.INTERNAL_SERVER_ERROR.value,
                     )
                 elif execution_result.data:
                     return Graphql.success_response(execution_result.data)
 
-            return Graphql.error_response("Uncaught execution error.", 500)
+            return Graphql.error_response(
+                "Uncaught execution error.",
+                HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
         except Exception as e:
-            return Graphql.error_response(str(e), 500)
+            return Graphql.error_response(
+                str(e),
+                HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+
+    @staticmethod
+    def build_graphql_schema() -> Schema:
+        raise NotImplementedError("Subclasses must implement the handle method.")
 
     @staticmethod
     def success_response(data: Any) -> dict[str, Any]:
@@ -221,7 +232,8 @@ class Graphql(object):
 
     @staticmethod
     def error_response(
-        errors: Union[str, list], status_code: int = 400
+        errors: Union[str, list],
+        status_code: int = HttpStatus.INTERNAL_SERVER_ERROR.value,
     ) -> dict[str, Any]:
         return HttpResponse.format_response({"errors": errors}, status_code)
 
