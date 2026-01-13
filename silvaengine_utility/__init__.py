@@ -7,7 +7,9 @@ __all__ = [
     "http",
     "graphql",
     "authorizer",
-    "common",
+    "serializer",
+    "invoker",
+    "database",
     "json_handler",
     "datetime_handler",
     "cache",
@@ -38,7 +40,6 @@ from .cache import (
     hybrid_cache,
     method_cache,
 )
-from .common import Common
 from .datetime_handler import (
     DateTimeHandler,
     PendulumDateTimeHandler,
@@ -50,9 +51,13 @@ from .http import HttpResponse
 from .json_handler import HighPerformanceJSONHandler, JSONHandler
 from .performance_monitor import performance_monitor
 from .utility import Struct, Utility
+from .serializer import Serializer
+from .graphql import Graphql
+from .invoker import Invoker
+from .database import Database
 
 # Convenience exports for common functions
-json_normalize = Utility.json_normalize
+json_normalize = Serializer.json_normalize
 convert_decimal_to_number = HighPerformanceJSONHandler.convert_decimal_to_number
 
 try:
