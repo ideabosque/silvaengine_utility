@@ -294,6 +294,8 @@ class Invoker(object):
                     for k, v in params.items()
                     if k not in ["logger", "setting", "endpoint_id", "part_id"]
                 }
+                setting["endpoint_id"] = endpoint_id
+                setting["part_id"] = part_id
                 return Invoker.invoke_funct_on_local(
                     logger, setting, funct, **local_params
                 )
@@ -304,6 +306,8 @@ class Invoker(object):
                     for k, v in params.items()
                     if k not in ["logger", "setting", "endpoint_id", "part_id"]
                 }
+                setting["endpoint_id"] = endpoint_id
+                setting["part_id"] = part_id
                 return Invoker.invoke_funct_on_local(
                     logger, setting, funct, **local_params
                 )
