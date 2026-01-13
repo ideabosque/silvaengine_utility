@@ -191,19 +191,7 @@ class Graphql(object):
                 logger=self.logger,
             )
 
-            if (
-                isinstance(params.get("custom_headers"), dict)
-                and "custom_headers" in params
-            ):
-                context.update(**params.get("custom_headers", {}))
-
             if isinstance(params.get("metadata"), dict) and "metadata" in params:
-                Debugger.info(
-                    variable=params.get("metadata"),
-                    delimiter="+",
-                    stage="Graphql Base (execute:metadata)",
-                    logger=self.logger,
-                )
                 context.update(**params.get("metadata", {}))
 
             if isinstance(params.get("context"), dict) and "context" in params:
