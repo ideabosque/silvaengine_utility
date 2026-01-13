@@ -14,6 +14,7 @@ from graphql.language import ast
 from silvaengine_constants import HttpStatus
 
 from .context import Context
+from .debugger import Debugger
 from .http import HttpResponse
 from .invoker import Invoker
 from .serializer import Serializer
@@ -183,6 +184,13 @@ class Graphql(object):
                 "connection_id": params.get("connection_id"),
             }
 
+            Debugger.info(
+                variable=params,
+                delimiter="+",
+                stage="Graphql Base (execute:params)",
+                logger=self.logger,
+            )
+
             if (
                 isinstance(params.get("custom_headers"), dict)
                 and "custom_headers" in params
@@ -190,12 +198,25 @@ class Graphql(object):
                 context.update(**params.get("custom_headers", {}))
 
             if isinstance(params.get("metadata"), dict) and "metadata" in params:
+                Debugger.info(
+                    variable=params.get("metadata"),
+                    delimiter="+",
+                    stage="Graphql Base (execute:metadata)",
+                    logger=self.logger,
+                )
                 context.update(**params.get("metadata", {}))
 
             if isinstance(params.get("context"), dict) and "context" in params:
                 context.update(**params.get("context", {}))
 
             query = params.get("query")
+
+            Debugger.info(
+                variable=context,
+                delimiter="+",
+                stage="Graphql Base (execute:context)",
+                logger=self.logger,
+            )
 
             if not query:
                 return Graphql.error_response("Invalid operations.")
