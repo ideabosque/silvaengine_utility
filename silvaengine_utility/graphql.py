@@ -150,7 +150,8 @@ def graphql_service_initialization(func: Callable) -> Callable:
 
             if "endpoint_id" in kwargs:
                 Context.set(
-                    "endpoint_id", str(kwargs.get("endpoint_id")).strip().lower()
+                    "endpoint_id",
+                    str(kwargs.get("endpoint_id")).strip().lower(),
                 )
 
             if logger and hasattr(logger, "info"):
@@ -183,16 +184,16 @@ class Graphql(object):
             }
 
             if (
-                "custom_headers" in params
-                and type(params.get("custom_headers")) is dict
+                isinstance(params.get("custom_headers"), dict)
+                and "custom_headers" in params
             ):
-                context.update(params.get("custom_headers", {}))
+                context.update(**params.get("custom_headers", {}))
 
-            if "metadata" in params and type(params.get("metadata")) is dict:
-                context.update(params.get("metadata", {}))
+            if isinstance(params.get("metadata"), dict) and "metadata" in params:
+                context.update(**params.get("metadata", {}))
 
-            if "context" in params and type(params.get("context")) is dict:
-                context.update(params.get("context", {}))
+            if isinstance(params.get("context"), dict) and "context" in params:
+                context.update(**params.get("context", {}))
 
             query = params.get("query")
 
