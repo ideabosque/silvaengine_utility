@@ -13,7 +13,7 @@ class Debugger(object):
         stage: str = "",
         delimiter: str = "-",
         delimiter_repetitions: int = 40,
-        setting: Dict[str, Any] = {},
+        setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
     ):
         fn = logger.info if isinstance(logger, logging.Logger) else print
@@ -26,7 +26,7 @@ class Debugger(object):
         delimiter = str(delimiter).strip() if str(delimiter).strip() else "-"
         stage = str(stage).strip()
 
-        if is_debug_mode:
+        if is_debug_mode and callable(fn):
             t = f"{delimiter * delimiter_repetitions} {{mark}}: {stage} {delimiter * delimiter_repetitions}"
 
             fn(t.format(mark="START"))
