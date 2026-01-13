@@ -11,6 +11,7 @@ import graphene
 from graphene import Schema
 from graphql import parse
 from graphql.language import ast
+
 from silvaengine_constants import HttpStatus
 
 from .context import Context
@@ -20,7 +21,9 @@ from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
 
-INTROSPECTION_QUERY = INTROSPECTION_QUERY = """
+INTROSPECTION_QUERY = (
+    INTROSPECTION_QUERY
+) = """
   query IntrospectionQuery {
     __schema {
       queryType { name }
@@ -311,6 +314,7 @@ class Graphql(object):
         graphql_operation_name: str,
         class_name: str | None = None,
         variables: dict[str, Any] = {},
+        query: str = None,
     ) -> dict[str, Any]:
         try:
             module_name = str(module_name).strip()
@@ -326,16 +330,17 @@ class Graphql(object):
             ):
                 raise Exception("Missing required parameter(s)")
 
-            schema = Graphql.get_graphql_schema(
-                module_name=module_name,
-                class_name=class_name,
-            )
+            if query is None:
+                schema = Graphql.get_graphql_schema(
+                    module_name=module_name,
+                    class_name=class_name,
+                )
 
-            query = Graphql.generate_graphql_operation(
-                operation_name=graphql_operation_name,
-                operation_type=graphql_operation_type,
-                schema=schema,
-            )
+                query = Graphql.generate_graphql_operation(
+                    operation_name=graphql_operation_name,
+                    operation_type=graphql_operation_type,
+                    schema=schema,
+                )
 
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
