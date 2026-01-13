@@ -182,11 +182,17 @@ class Graphql(object):
                 "connection_id": params.get("connection_id"),
             }
 
-            if params.get("custom_headers"):
-                context = dict(context, **params["custom_headers"])
+            if (
+                "custom_headers" in params
+                and type(params.get("custom_headers")) is dict
+            ):
+                context.update(params.get("custom_headers", {}))
 
-            if params.get("context"):
-                context = dict(context, **params["context"])
+            if "metadata" in params and type(params.get("metadata")) is dict:
+                context.update(params.get("metadata", {}))
+
+            if "context" in params and type(params.get("context")) is dict:
+                context.update(params.get("context", {}))
 
             query = params.get("query")
 
