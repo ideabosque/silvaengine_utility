@@ -293,12 +293,12 @@ class Graphql(object):
             aws_lambda=aws_lambda,
         )
 
-        if schema and type(schema) is dict:
+        if isinstance(schema, dict):
             if "data" in schema:
                 schema = schema.get("data")
 
-            if "__schema" in schema:
-                return schema.get("__schema")
+            if isinstance(schema, dict) and "__schema" in schema:
+                return schema.get("__schema", {})
 
         return schema if schema is not None else {}
 
@@ -396,8 +396,8 @@ class Graphql(object):
 
             schema = result.data if result.data is not None else {}
 
-            if type(schema) is dict and "__schema" in schema:
-                return schema.get("__schema")
+            if isinstance(schema, dict) and "__schema" in schema:
+                return schema.get("__schema", {})
 
             return schema
         except Exception as e:
