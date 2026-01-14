@@ -248,8 +248,6 @@ def object_cache(func: Callable) -> Callable:
                 if is_instance_method:
                     invoker_object = invoker.__self__
                     invoker_object.__init__(**parameters)
-
-            print(f"{'*' * 40} {ObjectCacheEngine.get_stats()}")
             return invoker
         except Exception as e:
             raise e
