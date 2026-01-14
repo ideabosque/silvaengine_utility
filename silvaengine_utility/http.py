@@ -23,18 +23,23 @@ class HttpResponse(object):
             else "application/json"
         )
 
-        response = {
+        return {
             "statusCode": int(status_code),
+            "headers": {
+                "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": content_type,
+            },
             "body": Serializer.json_dumps(data),
         }
 
-        if not as_websocket_format:
-            response.update(
-                headers={
-                    "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
-                    "Access-Control-Allow-Origin": "*",
-                    "Content-Type": content_type,
-                }
-            )
+        # if not as_websocket_format:
+        #     response.update(
+        #         headers={
+        #             "Access-Control-Allow-Headers": "Access-Control-Allow-Origin",
+        #             "Access-Control-Allow-Origin": "*",
+        #             "Content-Type": content_type,
+        #         }
+        #     )
 
-        return response
+        # return response
