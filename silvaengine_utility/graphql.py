@@ -11,7 +11,6 @@ import graphene
 from graphene import Schema
 from graphql import parse
 from graphql.language import ast
-
 from silvaengine_constants import HttpStatus
 
 from .context import Context
@@ -21,9 +20,7 @@ from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
 
-INTROSPECTION_QUERY = (
-    INTROSPECTION_QUERY
-) = """
+INTROSPECTION_QUERY = INTROSPECTION_QUERY = """
   query IntrospectionQuery {
     __schema {
       queryType { name }
@@ -187,13 +184,6 @@ class Graphql(object):
                 "connection_id": params.get("connection_id"),
             }
 
-            Debugger.info(
-                variable=params,
-                delimiter="+",
-                stage="Graphql Base (execute:params)",
-                logger=self.logger,
-            )
-
             if isinstance(params.get("metadata"), dict) and "metadata" in params:
                 context.update(**params.get("metadata", {}))
 
@@ -201,13 +191,6 @@ class Graphql(object):
                 context.update(**params.get("context", {}))
 
             query = params.get("query")
-
-            Debugger.info(
-                variable=context,
-                delimiter="+",
-                stage="Graphql Base (execute:context)",
-                logger=self.logger,
-            )
 
             if not query:
                 return Graphql.error_response("Invalid operations.")
