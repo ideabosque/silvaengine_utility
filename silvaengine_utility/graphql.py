@@ -169,7 +169,6 @@ def graphql_service_initialization(func: Callable) -> Callable:
 
 
 class Graphql(object):
-    # Parse the graphql request's body to AST and extract fields from the AST
     @graphql_service_initialization
     def __init__(self, logger: Optional[logging.Logger], **setting: Any) -> None:
         self.logger = logger
@@ -239,6 +238,7 @@ class Graphql(object):
     ) -> dict[str, Any]:
         return HttpResponse.format_response({"errors": errors}, status_code)
 
+    # TODO: Will be deprecated
     @staticmethod
     def execute_graphql_query(
         context: dict[str, Any],
@@ -266,6 +266,7 @@ class Graphql(object):
         # Normalize GraphQL response to ensure consistent structure
         return Graphql.normalize_graphql_response(result)
 
+    # TODO: Will be deprecated
     @staticmethod
     def fetch_graphql_schema(
         context: dict[str, Any],
@@ -297,7 +298,7 @@ class Graphql(object):
         graphql_operation_name: str,
         class_name: str | None = None,
         variables: dict[str, Any] = {},
-        query: str = None,
+        query: Optional[str] = None,
     ) -> dict[str, Any]:
         try:
             module_name = str(module_name).strip()
@@ -310,8 +311,12 @@ class Graphql(object):
                 or not function_name
                 or not graphql_operation_name
                 or not graphql_operation_type
+                or not context
+                or not isinstance(context, dict)
             ):
                 raise Exception("Missing required parameter(s)")
+            elif "setting" not in context:
+                raise Exception("Missing `setting`, please pass it via `context`")
 
             if query is None:
                 schema = Graphql.get_graphql_schema(
@@ -325,11 +330,17 @@ class Graphql(object):
                     schema=schema,
                 )
 
+            if "logger" not in context:
+                context["logger"] = logging.getLogger(name=module_name)
+
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
                 function_name=function_name,
                 class_name=class_name,
-                constructor_parameters=context,
+                constructor_parameters={
+                    "logger": context.get("logger"),
+                    **context.get("setting", {}),
+                },
             )(
                 **{
                     "query": query,

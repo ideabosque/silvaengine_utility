@@ -10,6 +10,7 @@ configuration and environment variable fallback.
 
 from __future__ import print_function
 
+import threading
 from typing import Any, Dict
 
 
@@ -25,9 +26,10 @@ class Context:
     """
 
     _attribute_values: Dict[str, Any] = {}
+    _lock: threading.RLock = threading.RLock()
 
-    @staticmethod
-    def set(attribute: str, value: Any) -> None:
+    @classmethod
+    def set(cls, attribute: str, value: Any) -> None:
         """
         Set a context attribute value.
 
@@ -35,10 +37,11 @@ class Context:
             attribute: The attribute name to set
             value: The value to set
         """
-        Context._attribute_values[str(attribute).strip().lower()] = value
+        with cls._lock:
+            cls._attribute_values[str(attribute).strip().lower()] = value
 
-    @staticmethod
-    def get(attribute: str) -> Any:
+    @classmethod
+    def get(cls, attribute: str) -> Any:
         """
         Get a context attribute value.
 
@@ -48,12 +51,15 @@ class Context:
         Returns:
             The attribute value or None if not set
         """
-        return Context._attribute_values.get(str(attribute).strip().lower())
+        with cls._lock:
+            return cls._attribute_values.get(str(attribute).strip().lower())
 
-    @staticmethod
-    def unset(attribute: str) -> Any:
-        return Context._attribute_values.pop(str(attribute).strip().lower())
+    @classmethod
+    def unset(cls, attribute: str) -> Any:
+        with cls._lock:
+            return cls._attribute_values.pop(str(attribute).strip().lower())
 
-    @staticmethod
-    def clear() -> None:
-        Context._attribute_values.clear()
+    @classmethod
+    def clear(cls) -> None:
+        with cls._lock:
+            cls._attribute_values.clear()
