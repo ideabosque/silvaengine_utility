@@ -171,7 +171,11 @@ def graphql_service_initialization(func: Callable) -> Callable:
 
 class Graphql(object):
     @graphql_service_initialization
-    def __init__(self, logger: Optional[logging.Logger], **setting: Any) -> None:
+    def __init__(
+        self,
+        logger: Optional[logging.Logger],
+        **setting: Dict[str, Any],
+    ) -> None:
         self.logger = logger
         self.setting = setting
 
@@ -209,34 +213,28 @@ class Graphql(object):
             if execution_result:
                 # Check for errors first - GraphQL can have both data and errors
                 if execution_result.errors:
-                    Debugger.info(
-                        setting=self.setting,
-                        variable=traceback.format_exc(),
-                        stage="Graphql Debug(execute)",
-                        logger=self.logger,
-                    )
-
                     return Graphql.error_response(
-                        [Utility.format_error(e) for e in execution_result.errors],
-                        HttpStatus.INTERNAL_SERVER_ERROR.value,
+                        errors=[
+                            Utility.format_error(e) for e in execution_result.errors
+                        ],
+                        status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
                     )
                 elif execution_result.data:
-                    return Graphql.success_response(execution_result.data)
+                    return Graphql.success_response(data=execution_result.data)
 
             return Graphql.error_response(
-                "Uncaught execution error.",
-                HttpStatus.INTERNAL_SERVER_ERROR.value,
+                errors="Uncaught execution error",
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
         except Exception as e:
             Debugger.info(
-                setting=self.setting,
                 variable=e,
                 stage="Graphql Debug(execute)",
                 logger=self.logger,
             )
             return Graphql.error_response(
-                str(e),
-                HttpStatus.INTERNAL_SERVER_ERROR.value,
+                errors=str(e),
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
 
     @staticmethod
