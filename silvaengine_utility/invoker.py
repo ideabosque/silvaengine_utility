@@ -107,7 +107,7 @@ class Invoker(object):
             )
 
     @staticmethod
-    def create_async_task(task, parameters: Dict[str, Any]) -> Awaitable:
+    def execute_async_task(task, parameters: Dict[str, Any]) -> Awaitable:
         if not callable(task):
             raise ValueError(f"Not callable function `{task}`")
 
