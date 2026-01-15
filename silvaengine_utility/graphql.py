@@ -197,7 +197,7 @@ class Graphql(object):
                 return Graphql.error_response("Invalid operations.")
 
             execution_result = Invoker.sync_call_async_compatible(
-                schema.execute_async(
+                coroutine_task=schema.execute_async(
                     query,
                     context_value=context,
                     variable_values=params.get("variables", {}),
@@ -357,7 +357,7 @@ class Graphql(object):
             )
 
             if (
-                type(result) is not dict
+                isinstance(result, dict)
                 or "statusCode" not in result
                 or "body" not in result
             ):
@@ -368,7 +368,7 @@ class Graphql(object):
 
             if not result:
                 return {}
-            elif type(result) is str:
+            elif isinstance(result, str) or isinstance(result, bytes):
                 result = Serializer.json_loads(result)
 
             if status_code.startswith("20"):
