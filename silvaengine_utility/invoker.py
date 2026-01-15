@@ -83,7 +83,7 @@ class Invoker(object):
             if find_spec(name=module_name, package=module_name) is None:
                 raise ModuleNotFoundError(f"Module spec for '{module_name}' not found")
 
-            agent = import_module(module_name)
+            agent = import_module(name=module_name)
         except Exception as e:
             raise e
 
@@ -107,22 +107,33 @@ class Invoker(object):
             )
 
     @staticmethod
-    def _run_async_in_new_thread(coro, result_queue):
+    def create_async_task(task: Callable, parameters: Dict[str, Any])
         try:
-            result_queue.put(asyncio.run(coro))
+            if callable(task):
+                return asyncio.to_thread(task, **parameters)
+
+            raise ValueError(f"Invalid function `task`")
+        except Exception as e:
+            raise e
+
+    @staticmethod
+    def _run_async_in_new_thread(coroutine_task, result_queue):
+        try:
+            result_queue.put(asyncio.run(coroutine_task))
         except Exception as e:
             result_queue.put(e)
 
     @staticmethod
-    def sync_call_async_compatible(coro):
+    def sync_call_async_compatible(coroutine_task):
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            return asyncio.run(coro)
+            return asyncio.run(coroutine_task)
         else:
             result_queue = Queue()
             thread = threading.Thread(
-                target=Invoker._run_async_in_new_thread, args=(coro, result_queue)
+                target=Invoker._run_async_in_new_thread,
+                args=(coroutine_task, result_queue),
             )
             thread.start()
             thread.join()
