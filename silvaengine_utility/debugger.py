@@ -16,23 +16,26 @@ class Debugger(object):
         setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
     ):
-        fn = (
-            logger.info
-            if isinstance(logger, logging.Logger)
-            else logging.getLogger(name="debug")
-        )
         is_debug_mode = (
             setting.get("debug_mode", True) if type(setting) is dict else True
         )
-        delimiter_repetitions = (
-            int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 40
-        )
-        delimiter = str(delimiter).strip() if str(delimiter).strip() else "-"
-        stage = str(stage).strip()
 
-        if is_debug_mode and callable(fn):
-            t = f"{delimiter * delimiter_repetitions} {{mark}}: {stage} {delimiter * delimiter_repetitions}"
+        if is_debug_mode:
+            logging.basicConfig(level=logging.INFO)
+            fn = (
+                logger.info
+                if isinstance(logger, logging.Logger)
+                else logging.getLogger("DEBUG").info
+            )
 
-            fn(t.format(mark="START"))
+            delimiter_repetitions = (
+                int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 40
+            )
+            delimiter = str(delimiter).strip() if str(delimiter).strip() else "-"
+            stage = str(stage).strip()
+
+            template = f"{delimiter * delimiter_repetitions} {{mark}}: {stage} {delimiter * delimiter_repetitions}"
+
+            fn(template.format(mark="START"))
             fn(variable)
-            fn(t.format(mark="END"))
+            fn(template.format(mark="END"))
