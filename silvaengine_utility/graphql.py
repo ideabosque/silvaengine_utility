@@ -175,6 +175,8 @@ class Graphql(object):
         self.setting = setting
 
     def execute(self, schema: Schema, **params: Dict[str, Any]) -> Any:
+        if not isinstance(params, dict):
+            raise ValueError("Invalid parameters")
         try:
             context = {
                 "logger": self.logger,
@@ -218,6 +220,12 @@ class Graphql(object):
                 HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
         except Exception as e:
+            Debugger.info(
+                setting=self.setting,
+                variable=e,
+                stage="Graphql Debug(execute)",
+                logger=self.logger,
+            )
             return Graphql.error_response(
                 str(e),
                 HttpStatus.INTERNAL_SERVER_ERROR.value,
