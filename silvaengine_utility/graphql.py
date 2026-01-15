@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 import logging
+import traceback
 from typing import Any, Callable, Dict, Optional, Union
 
 import boto3
@@ -208,6 +209,13 @@ class Graphql(object):
             if execution_result:
                 # Check for errors first - GraphQL can have both data and errors
                 if execution_result.errors:
+                    Debugger.info(
+                        setting=self.setting,
+                        variable=traceback.format_exc(),
+                        stage="Graphql Debug(execute)",
+                        logger=self.logger,
+                    )
+
                     return Graphql.error_response(
                         [Utility.format_error(e) for e in execution_result.errors],
                         HttpStatus.INTERNAL_SERVER_ERROR.value,
