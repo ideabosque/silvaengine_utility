@@ -330,16 +330,15 @@ class Graphql(object):
                     schema=schema,
                 )
 
-            if "logger" not in context:
-                context["logger"] = logging.getLogger(name=module_name)
-
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
                 function_name=function_name,
                 class_name=class_name,
                 constructor_parameters={
-                    "logger": context.get("logger"),
-                    **context.get("setting", {}),
+                    "logger": context.pop(
+                        "logger", logging.getLogger(name=module_name)
+                    ),
+                    **context.pop("setting", {}),
                 },
             )(
                 **{
