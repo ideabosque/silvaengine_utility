@@ -33,7 +33,7 @@ class HttpResponse(object):
             response_headers.update(headers)
 
         return {
-            "statusCode": int(status_code),
+            "statusCode": status_code,
             "headers": response_headers,
             "body": Serializer.json_dumps(data),
         }
