@@ -16,7 +16,11 @@ class Debugger(object):
         setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
     ):
-        fn = logger.info if isinstance(logger, logging.Logger) else print
+        fn = (
+            logger.info
+            if isinstance(logger, logging.Logger)
+            else logging.getLogger(name="debug")
+        )
         is_debug_mode = (
             setting.get("debug_mode", True) if type(setting) is dict else True
         )
