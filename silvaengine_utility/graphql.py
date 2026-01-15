@@ -361,6 +361,11 @@ class Graphql(object):
                 }
             )
 
+            Debugger.info(
+                variable=result,
+                stage=__name__,
+            )
+
             if (
                 not isinstance(result, dict)
                 or "statusCode" not in result
