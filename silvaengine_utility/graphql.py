@@ -362,7 +362,7 @@ class Graphql(object):
             )
 
             if (
-                isinstance(result, dict)
+                not isinstance(result, dict)
                 or "statusCode" not in result
                 or "body" not in result
             ):
