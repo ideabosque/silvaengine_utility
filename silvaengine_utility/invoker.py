@@ -112,7 +112,7 @@ class Invoker(object):
             raise ValueError(f"Not callable function `{task}`")
 
         try:
-            return asyncio.to_thread(task, **parameters)
+            return asyncio.create_task(asyncio.to_thread(task, **parameters))
         except Exception as e:
             raise e
 
