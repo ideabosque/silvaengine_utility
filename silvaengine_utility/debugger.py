@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import logging
+import traceback
 from typing import Any, Dict, Optional
 
 
@@ -38,4 +39,6 @@ class Debugger(object):
 
             fn(template.format(mark="START"))
             fn(variable)
-            fn(template.format(mark="END"))
+            fn(template.format(mark=f"{delimiter * 5}"))
+            fn(traceback.format_exc())
+            fn(template.format(mark=" END "))

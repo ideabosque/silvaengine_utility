@@ -16,6 +16,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 import boto3
 
 from .cache.decorators import object_cache
+from .debugger import Debugger
 from .serializer import Serializer
 
 
@@ -199,11 +200,11 @@ class Invoker(object):
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
-        print("=" * 80)
-        print(f"function_name: {function_name}")
-        print(f"invocation_type: {invocation_type}")
-        print(f"payload: {payload}")
-        print("=" * 80)
+
+        Debugger.info(
+            variable=f"Function: {function_name}, Payload: {payload}",
+            stage=__name__,
+        )
 
         response = aws_lambda.invoke(
             FunctionName=function_name,
