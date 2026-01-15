@@ -314,6 +314,7 @@ class Graphql(object):
         query: Optional[str] = None,
     ) -> dict[str, Any]:
         try:
+            execution_context = context.copy()
             module_name = str(module_name).strip()
             function_name = str(function_name).strip()
             graphql_operation_type = str(graphql_operation_type).strip()
@@ -324,11 +325,11 @@ class Graphql(object):
                 or not function_name
                 or not graphql_operation_name
                 or not graphql_operation_type
-                or not context
-                or not isinstance(context, dict)
+                or not execution_context
+                or not isinstance(execution_context, dict)
             ):
                 raise Exception("Missing required parameter(s)")
-            elif "setting" not in context:
+            elif "setting" not in execution_context:
                 raise Exception("Missing `setting`, please pass it via `context`")
 
             if query is None:
@@ -348,22 +349,17 @@ class Graphql(object):
                 function_name=function_name,
                 class_name=class_name,
                 constructor_parameters={
-                    "logger": context.pop(
+                    "logger": execution_context.pop(
                         "logger", logging.getLogger(name=module_name)
                     ),
-                    **context.pop("setting", {}),
+                    **execution_context.pop("setting", {}),
                 },
             )(
                 **{
                     "query": query,
                     "variables": variables,
-                    "context": context,
+                    "context": execution_context,
                 }
-            )
-
-            Debugger.info(
-                variable=result,
-                stage=__name__,
             )
 
             if (
