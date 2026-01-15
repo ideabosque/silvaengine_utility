@@ -11,7 +11,7 @@ from importlib import import_module
 from importlib.util import find_spec
 from queue import Queue
 from types import CoroutineType, FunctionType
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import boto3
 
@@ -107,12 +107,12 @@ class Invoker(object):
             )
 
     @staticmethod
-    def create_async_task(task, parameters: Dict[str, Any])
-        try:
-            if callable(task):
-                return asyncio.to_thread(task, **parameters)
+    def create_async_task(task, parameters: Dict[str, Any]) -> Awaitable:
+        if not callable(task):
+            raise ValueError(f"Not callable function `{task}`")
 
-            raise ValueError(f"Invalid function `task`")
+        try:
+            return asyncio.to_thread(task, **parameters)
         except Exception as e:
             raise e
 
