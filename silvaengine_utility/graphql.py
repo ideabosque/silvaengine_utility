@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import functools
 import logging
-import traceback
 from typing import Any, Callable, Dict, Optional, Union
 
 import boto3
@@ -199,7 +198,7 @@ class Graphql(object):
             query = params.get("query")
 
             if not query:
-                return Graphql.error_response("Invalid operations.")
+                return Graphql.error_response(errors="Invalid operations")
 
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
