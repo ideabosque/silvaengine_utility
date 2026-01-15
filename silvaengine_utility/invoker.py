@@ -107,7 +107,7 @@ class Invoker(object):
             )
 
     @staticmethod
-    def create_async_task(task: Callable, parameters: Dict[str, Any])
+    def create_async_task(task, parameters: Dict[str, Any])
         try:
             if callable(task):
                 return asyncio.to_thread(task, **parameters)
