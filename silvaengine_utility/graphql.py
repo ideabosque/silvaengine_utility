@@ -381,6 +381,11 @@ class Graphql(object):
                 raise Exception(f"Request graphql error with status: {status_code}")
 
         except Exception as e:
+            Debugger.info(
+                variable=e,
+                stage="Graphql Debug(request_graphql)",
+                delimiter="#",
+            )
             raise e
 
     @staticmethod
