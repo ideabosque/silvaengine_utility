@@ -38,7 +38,7 @@ class Debugger(object):
             template = f"{delimiter * delimiter_repetitions} {{mark}}: {stage} {delimiter * delimiter_repetitions}"
 
             fn(template.format(mark="START"))
-            fn(variable)
+            fn(f"\n{variable}\n")
             fn(template.format(mark=f"{delimiter * 5}"))
-            fn(traceback.format_exc())
+            fn(f"\n{traceback.format_stack()}\n")
             fn(template.format(mark=" END "))
