@@ -18,7 +18,7 @@ class Debugger(object):
     ):
         fn = logger.info if isinstance(logger, logging.Logger) else print
         is_debug_mode = (
-            setting.get("debug_model", True) if type(setting) is dict else True
+            setting.get("debug_mode", True) if type(setting) is dict else True
         )
         delimiter_repetitions = (
             int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 40
