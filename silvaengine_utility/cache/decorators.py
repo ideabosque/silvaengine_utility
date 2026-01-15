@@ -24,6 +24,7 @@ def hybrid_cache(
     key_generator: Optional[Callable] = None,
     condition: Optional[Callable] = None,
     skip_cache_arg: str = "skip_cache",
+    cache_enabled: Union[bool, Callable[[], bool]] = True,
 ):
     """
     Generic hybrid cache decorator.
@@ -35,6 +36,7 @@ def hybrid_cache(
         key_generator: Custom function to generate cache key from args/kwargs
         condition: Function to determine if result should be cached
         skip_cache_arg: Argument name to skip cache (removed from kwargs)
+        cache_enabled: Boolean or callable that returns boolean to enable/disable cache
     """
 
     def decorator(func: Callable) -> Callable:
@@ -43,6 +45,13 @@ def hybrid_cache(
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            # Check if cache is enabled (support both bool and callable)
+            is_cache_enabled = (
+                cache_enabled() if callable(cache_enabled) else cache_enabled
+            )
+            if not is_cache_enabled:
+                return func(*args, **kwargs)
+
             # Check if cache should be skipped
             skip_cache = kwargs.pop(skip_cache_arg, False)
             if skip_cache:
@@ -93,6 +102,7 @@ def method_cache(
     cache_name: str = "method",
     include_class: bool = True,
     include_method: bool = True,
+    cache_enabled: Union[bool, Callable[[], bool]] = True,
 ):
     """
     Generic cache decorator for class methods and functions.
@@ -102,6 +112,8 @@ def method_cache(
         cache_name: Cache instance name for separation (e.g., "settings", "database", "api")
         include_class: Include class name in cache key (default: True)
         include_method: Include method name in cache key (default: True)
+        cache_enabled: Boolean or callable that returns boolean to enable/disable cache.
+                      When callable, it is evaluated at runtime on each call.
 
     Examples:
         @method_cache(ttl=1800, cache_name="settings")
@@ -112,6 +124,10 @@ def method_cache(
 
         @method_cache(ttl=300, cache_name="api", include_class=False)
         def call_external_api(self, endpoint): ...
+
+        # With cache_enabled flag (callable for runtime evaluation)
+        @method_cache(ttl=300, cache_enabled=Config.is_cache_enabled)
+        def get_data(self, id): ...
     """
 
     def key_gen(*args, **kwargs):
@@ -151,7 +167,9 @@ def method_cache(
 
         return ":".join(key_parts)
 
-    return hybrid_cache(ttl=ttl, cache_name=cache_name, key_generator=key_gen)
+    return hybrid_cache(
+        ttl=ttl, cache_name=cache_name, key_generator=key_gen, cache_enabled=cache_enabled
+    )
 
 
 def object_cache(func: Callable) -> Callable:
