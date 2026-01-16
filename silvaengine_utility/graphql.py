@@ -562,33 +562,13 @@ class Graphql(object):
 
 class JSON(graphene.Scalar):
     """
-    JSON scalar type for GraphQL with dynamic key style support.
-
     The `JSON` scalar type represents JSON values as specified by
-    [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
-
-    Extended features:
-    - Dynamic key_style switching between camelCase and snake_case
-    - Automatic key conversion during serialization and parsing
-    - Recursive key conversion for nested structures
-    - Type safety with proper validation
-
-    Attributes:
-        _key_style: Current key style ("camel" or "snake")
+    [ECMA-404](http://www.ecma-international.org/
+    publications/files/ECMA-ST/ECMA-404.pdf).
     """
-
-    _to_camel_style: bool = True
 
     @staticmethod
     def identity(value: Any) -> Any:
-        """Return the value unchanged for serialization.
-
-        Args:
-            value: Input value
-
-        Returns:
-            The same value if it's a valid JSON type, None otherwise
-        """
         if isinstance(value, (str, bool, int, float)):
             return value.__class__(value)
         elif isinstance(value, (list, dict)):
@@ -596,54 +576,12 @@ class JSON(graphene.Scalar):
         else:
             return None
 
-    def serialize(self, value: Any, ast_node=None) -> Any:
-        """Serialize value to JSON with key style conversion.
-
-        Args:
-            value: Input value to serialize
-            ast_node: GraphQL AST node (for Scalar serialization)
-
-        Returns:
-            JSON value with keys converted to configured style
-        """
-        if ast_node is not None:
-            return JSON.parse_literal(ast_node)
-
-        raw_value = self.identity(value)
-
-        return Utility.convert_dict_key_style(
-            data=raw_value,
-            to_camel_style=self._to_camel_style,
-        )
-
-    def parse_value(self, value: Any) -> Any:
-        """Parse value from JSON with reverse key style conversion.
-
-        Args:
-            value: Input value to parse
-
-        Returns:
-            Parsed value with keys converted from configured style
-        """
-        raw_value = self.identity(value)
-
-        return Utility.convert_dict_key_style(
-            data=raw_value, to_camel_style=not self._to_camel_style
-        )
+    serialize = identity
+    parse_value = identity
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
-        """Parse GraphQL AST literal node to Python value.
-
-        Args:
-            node: GraphQL AST node
-
-        Returns:
-            Python value corresponding to the AST node
-        """
-        if isinstance(node, ast.StringValue):
-            return node.value
-        elif isinstance(node, ast.BooleanValue):
+        if isinstance(node, (ast.StringValue, ast.BooleanValue)):
             return node.value
         elif isinstance(node, ast.IntValue):
             return int(node.value)
@@ -658,55 +596,3 @@ class JSON(graphene.Scalar):
             }
         else:
             return None
-
-
-class JSONCamelCase(graphene.Scalar):
-    """JSON scalar with camelCase key style."""
-
-    _to_camel_style = True
-
-    @staticmethod
-    def serialize(value: Any) -> Any:
-        raw_value = JSON.identity(value)
-        return Utility.convert_dict_key_style(
-            data=raw_value,
-            to_camel_style=JSONCamelCase._to_camel_style,
-        )
-
-    @staticmethod
-    def parse_value(value: Any) -> Any:
-        raw_value = JSON.identity(value)
-        return Utility.convert_dict_key_style(
-            data=raw_value,
-            to_camel_style=not JSONCamelCase._to_camel_style,
-        )
-
-    @staticmethod
-    def parse_literal(node: ast.Node) -> Any:
-        return JSON.parse_literal(node)
-
-
-class JSONSnakeCase(graphene.Scalar):
-    """JSON scalar with snake_case key style."""
-
-    _to_camel_style = False
-
-    @staticmethod
-    def serialize(value: Any) -> Any:
-        raw_value = JSON.identity(value)
-        return Utility.convert_dict_key_style(
-            data=raw_value,
-            to_camel_style=JSONSnakeCase._to_camel_style,
-        )
-
-    @staticmethod
-    def parse_value(value: Any) -> Any:
-        raw_value = JSON.identity(value)
-        return Utility.convert_dict_key_style(
-            data=raw_value,
-            to_camel_style=not JSONSnakeCase._to_camel_style,
-        )
-
-    @staticmethod
-    def parse_literal(node: ast.Node) -> Any:
-        return JSON.parse_literal(node)
