@@ -13,7 +13,7 @@ class Debugger(object):
         variable: Any,
         stage: str = "",
         delimiter: str = "-",
-        delimiter_repetitions: int = 40,
+        delimiter_repetitions: int = 20,
         setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
     ):
@@ -35,10 +35,10 @@ class Debugger(object):
             delimiter = str(delimiter).strip() if str(delimiter).strip() else "-"
             stage = str(stage).strip()
 
-            template = f"{delimiter * delimiter_repetitions} {{mark}}: {stage} {delimiter * delimiter_repetitions}"
+            template = f"{delimiter * delimiter_repetitions} {{mark}} {stage} {delimiter * delimiter_repetitions}"
 
-            fn(template.format(mark="START"))
-            fn(f"\n{variable}\n")
-            fn(template.format(mark=f"{delimiter * 5}"))
-            fn(f"\n{traceback.format_stack()}\n")
-            fn(template.format(mark=" END "))
+            fn(template.format(mark="START:"))
+            fn(f"{variable}")
+            fn(template.format(mark=f"{delimiter * 6}"))
+            fn(f"{traceback.format_stack()}")
+            fn(template.format(mark="END:"))
