@@ -30,7 +30,7 @@ class Debugger(object):
             )
 
             delimiter_repetitions = (
-                int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 40
+                int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 20
             )
             delimiter = str(delimiter).strip() if str(delimiter).strip() else "-"
             stage = str(stage).strip()

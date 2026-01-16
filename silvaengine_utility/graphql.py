@@ -187,6 +187,7 @@ class Graphql(object):
                 "setting": self.setting,
                 "endpoint_id": params.get("endpoint_id"),
                 "connection_id": params.get("connection_id"),
+                "aws_lambda_arn": params.get("aws_lambda_arn"),
             }
 
             if isinstance(params.get("metadata"), dict) and "metadata" in params:
