@@ -311,7 +311,7 @@ class Graphql(object):
         graphql_operation_type: str,
         graphql_operation_name: str,
         class_name: str | None = None,
-        variables: dict[str, Any] = {},
+        variables: Optional[dict[str, Any]] = None,
         query: Optional[str] = None,
     ) -> dict[str, Any]:
         try:
