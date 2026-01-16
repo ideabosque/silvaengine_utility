@@ -33,19 +33,19 @@ pip install silvaengine-utility[all]
 ### JSON Operations
 
 ```python
-from silvaengine_utility import Utility
+from silvaengine_utility import Serializer
 
 # Serialize data with optimized performance
 data = {"user": "john", "timestamp": datetime.now(), "amount": Decimal("100.50")}
-json_string = Utility.json_dumps(data)
+json_string = Serializer.json_dumps(data)
 
 # Deserialize with automatic type conversion
-parsed_data = Utility.json_loads(json_string)
+parsed_data = Serializer.json_loads(json_string)
 
 # Performance monitoring
-Utility.reset_json_performance_stats()
+Serializer.reset_json_performance_stats()
 # ... perform operations ...
-stats = Utility.get_json_performance_stats()
+stats = Serializer.get_json_performance_stats()
 print(f"Operations: {stats['json_dumps']['count']}")
 ```
 

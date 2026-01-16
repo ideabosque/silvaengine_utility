@@ -5,7 +5,7 @@ from __future__ import print_function
 import re
 import socket
 import struct
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, List, Optional, Union
 
 __author__ = "bibow"
 
@@ -63,6 +63,12 @@ class Utility(object):
         # Add a cache for snake case conversions to avoid repeated calculations
 
     @staticmethod
+    def to_camel_case(s: str) -> str:
+        """Use underscore naming conventions to switch to camelCase (first letter lowercase)."""
+        components = str(s).strip().split("_")
+        return components[0] + "".join(x.title() for x in components[1:])
+
+    @staticmethod
     def to_snake_case(s: str) -> str:
         """Convert string to snake_case format with caching for improved performance."""
         if not s:
@@ -70,6 +76,7 @@ class Utility(object):
 
         # Check cache first
         cache_key = str(s)
+
         if cache_key in Utility._snake_case_cache:
             return Utility._snake_case_cache[cache_key]
 
@@ -115,6 +122,40 @@ class Utility(object):
         snake_case = "".join(result)
         Utility._snake_case_cache[cache_key] = snake_case
         return snake_case
+
+    @staticmethod
+    def convert_dict_key_style(data: Any, to_camel_style: bool = True) -> Any:
+        """
+        Naming format for all keys in the recursive transformation of JSON data:
+        :param data: Any JSON data type (dict/list/str/int/float/bool/None)
+        :param key_style: Target format camel=camelCase, snake=underscore
+        :return: Transformed JSON data
+        """
+        if isinstance(data, (str, bool, int, float, type(None))):
+            return data
+
+        elif isinstance(data, list):
+            return [
+                Utility.convert_dict_key_style(data=item, to_camel_style=to_camel_style)
+                for item in data
+            ]
+
+        elif isinstance(data, dict):
+            result = {}
+            convert_func = (
+                Utility.to_camel_case if to_camel_style else Utility.to_snake_case
+            )
+
+            for k, v in data.items():
+                key = str(convert_func(k) if isinstance(k, str) else k).strip()
+                result[key] = Utility.convert_dict_key_style(
+                    data=v,
+                    to_camel_style=to_camel_style,
+                )
+            return result
+
+        else:
+            return None
 
     @staticmethod
     def convert_object_to_dict(instance: Any) -> Dict[str, Any]:
