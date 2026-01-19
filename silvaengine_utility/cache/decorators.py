@@ -268,7 +268,11 @@ def object_cache(func: Callable) -> Callable:
 
                 if is_instance_method:
                     invoker.__self__.__init__(**parameters)
-                elif inspect.isclass(invoker.__self__) and hasattr(invoker, "__init__"):
+                elif (
+                    not hasattr(invoker, "__self__")
+                    and inspect.isclass(invoker)
+                    and hasattr(invoker, "__init__")
+                ):
                     invoker.__init__(**parameters)
             return invoker
         except Exception as e:
