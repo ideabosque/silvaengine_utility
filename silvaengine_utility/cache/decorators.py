@@ -11,6 +11,7 @@ Provides various caching decorators optimized for different use cases:
 
 import functools
 import inspect
+import types
 from typing import Any, Callable, Dict, Optional, Union
 
 from .hybrid_cache import HybridCacheEngine, default_cache
@@ -268,14 +269,7 @@ def object_cache(func: Callable) -> Callable:
 
                 if is_instance_method:
                     invoker.__self__.__init__(**parameters)
-                elif (
-                    not hasattr(invoker, "__self__")
-                    and inspect.isclass(invoker)
-                    and hasattr(invoker, "__init__")
-                ):
-                    print(">" * 120)
-                    print(parameters)
-                    print("<" * 120)
+                elif hasattr(invoker, "__init__"):
                     invoker.__init__(**parameters)
             return invoker
         except Exception as e:
