@@ -256,10 +256,6 @@ def object_cache(func: Callable) -> Callable:
             invoker = get_invoker(*args, **kwargs)
             parameters = kwargs.get("constructor_parameters")
 
-            print(">" * 120)
-            print(type(invoker))
-            print("<" * 120)
-
             if invoker and isinstance(parameters, dict) and len(parameters) > 0:
                 is_instance_method = not (
                     inspect.isfunction(invoker)
