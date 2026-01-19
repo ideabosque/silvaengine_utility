@@ -17,17 +17,20 @@ class Debugger(object):
         setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
     ):
+        debug_mode_key = "debug_mode"
         is_debug_mode = (
-            setting.get("debug_mode", True) if type(setting) is dict else True
+            setting.get("debug_mode", True)
+            if isinstance(setting, dict) and debug_mode_key in setting
+            else True
         )
 
         if is_debug_mode:
-            logging.basicConfig(level=logging.INFO)
-            fn = (
-                logger.info
-                if isinstance(logger, logging.Logger)
-                else logging.getLogger("DEBUG").info
+            logger = (
+                logger
+                if logger and isinstance(logger, logging.Logger)
+                else logging.getLogger("DEBUG")
             )
+            logger.setLevel(level=logging.DEBUG)
 
             delimiter_repetitions = (
                 int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 20
@@ -37,8 +40,8 @@ class Debugger(object):
 
             template = f"{delimiter * delimiter_repetitions} {{mark}} {stage} {delimiter * delimiter_repetitions}"
 
-            fn(template.format(mark="START:"))
-            fn(f"{variable}")
-            fn(template.format(mark=f"{delimiter * 6}"))
-            fn(f"{traceback.format_stack()}")
-            fn(template.format(mark="END:"))
+            logger.info(template.format(mark="START:"))
+            logger.info(f"{variable}")
+            logger.info(template.format(mark=f"{delimiter * 6}"))
+            logger.info(f"{traceback.format_stack()}")
+            logger.info(template.format(mark="END:"))
