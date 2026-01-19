@@ -273,6 +273,9 @@ def object_cache(func: Callable) -> Callable:
                     and inspect.isclass(invoker)
                     and hasattr(invoker, "__init__")
                 ):
+                    print(">" * 120)
+                    print(parameters)
+                    print("<" * 120)
                     invoker.__init__(**parameters)
             return invoker
         except Exception as e:
