@@ -41,7 +41,7 @@ class Invoker(object):
     @object_cache
     def resolve_proxied_callable(
         module_name: str,
-        function_name: str,
+        function_name: Optional[str] = None,
         class_name: Optional[str] = None,
         constructor_parameters: Optional[Dict[str, Any]] = None,
     ) -> Any:
@@ -68,14 +68,19 @@ class Invoker(object):
             AttributeError: If the class or function does not exist in the specified module.
         """
         # Validate required parameters
-        if not module_name or not function_name:
-            raise ValueError("module_name and function_name are required")
+        if not module_name:
+            raise ValueError("Invalid required parameter `module_name`")
 
         # Clean and validate parameters
         try:
             module_name = str(module_name).strip()
-            function_name = str(function_name).strip()
+            function_name = str(function_name).strip() if function_name else None
             class_name = str(class_name).strip() if class_name else None
+
+            if not function_name and not class_name:
+                raise ValueError(
+                    "Both parameters `function_name` and `class_name` cannot be empty at the same time"
+                )
         except (TypeError, ValueError) as e:
             raise TypeError(f"Invalid parameter type: {e}")
 
@@ -100,12 +105,15 @@ class Invoker(object):
                 )
 
         # Get the requested function/method
-        try:
-            return getattr(agent, function_name)
-        except AttributeError as e:
-            raise AttributeError(
-                f"Function '{function_name}' not found in target object: {e}"
-            )
+        if function_name:
+            try:
+                return getattr(agent, function_name)
+            except AttributeError as e:
+                raise AttributeError(
+                    f"Function '{function_name}' not found in target object: {e}"
+                )
+
+        return agent
 
     @staticmethod
     def execute_async_task(task, parameters: Dict[str, Any]) -> Awaitable:
