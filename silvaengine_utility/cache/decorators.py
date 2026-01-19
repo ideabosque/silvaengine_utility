@@ -256,7 +256,7 @@ def object_cache(func: Callable) -> Callable:
             invoker = get_invoker(*args, **kwargs)
             parameters = kwargs.get("constructor_parameters")
 
-            if type(parameters) is dict and len(parameters) > 0:
+            if invoker and isinstance(parameters, dict) and len(parameters) > 0:
                 is_instance_method = not (
                     inspect.isfunction(invoker)
                     or (
@@ -266,12 +266,10 @@ def object_cache(func: Callable) -> Callable:
                     )
                 ) and inspect.ismethod(invoker)
 
-                if (
-                    hasattr(invoker, "__self__")
-                    and hasattr(invoker, "__init__")
-                    and is_instance_method
-                ):
+                if is_instance_method:
                     invoker.__self__.__init__(**parameters)
+                elif inspect.isclass(invoker.__self__) and hasattr(invoker, "__init__"):
+                    invoker.__init__(**parameters)
             return invoker
         except Exception as e:
             raise e

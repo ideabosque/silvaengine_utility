@@ -30,7 +30,7 @@ class Debugger(object):
                 if logger and isinstance(logger, logging.Logger)
                 else logging.getLogger("DEBUG")
             )
-            logger.setLevel(level=logging.DEBUG)
+            logger.setLevel(level=logging.INFO)
 
             delimiter_repetitions = (
                 int(delimiter_repetitions) if int(delimiter_repetitions) > 0 else 20
