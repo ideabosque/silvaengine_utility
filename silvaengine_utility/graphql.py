@@ -85,7 +85,39 @@ fragment TypeRef on __Type {
   name
   description
   ofType {
-    ...TypeRef
+    kind
+    name
+    description
+    ofType {
+      kind
+      name
+      description
+      ofType {
+        kind
+        name
+        description
+        ofType {
+          kind
+          name
+          description
+          ofType {
+            kind
+            name
+            description
+            ofType {
+              kind
+              name
+              description
+              ofType {
+                kind
+                name
+                description
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 """
