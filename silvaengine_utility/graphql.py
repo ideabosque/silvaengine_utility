@@ -20,69 +20,89 @@ from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
 
-INTROSPECTION_QUERY = INTROSPECTION_QUERY = """
-  query IntrospectionQuery {
-    __schema {
-      queryType { name }
-      mutationType { name }
-      subscriptionType { name }
-      types {
-        ...FullType
-      }
-      directives {
-        name
-        description
-        locations
-        args {
-          ...InputValue
-        }
-      }
-    }
-  }
-
-  fragment FullType on __Type {
-    kind
-    name
+INTROSPECTION_QUERY = """
+query IntrospectionQuery {
+  __schema {
     description
-    fields(includeDeprecated: true) {
+
+    queryType           { name }
+    mutationType        { name }
+    subscriptionType    { name }
+
+    types {
+      ...FullType
+    }
+
+    directives {
       name
       description
-      args {
+
+      locations
+      isRepeatable
+
+      args(includeDeprecated: true) {
         ...InputValue
       }
-      type {
-        ...TypeRef
-      }
-      isDeprecated
-      deprecationReason
-    }
-    inputFields {
-      ...InputValue
-    }
-    interfaces {
-      ...TypeRef
-    }
-    enumValues(includeDeprecated: true) {
-      name
-      description
-      isDeprecated
-      deprecationReason
-    }
-    possibleTypes {
-      ...TypeRef
     }
   }
+}
 
-  fragment InputValue on __InputValue {
+fragment FullType on __Type {
+  kind
+  name
+  description
+  specifiedByURL
+
+  fields(includeDeprecated: true) {
     name
     description
+    isDeprecated
+    deprecationReason
+
+    args(includeDeprecated: true) {
+      ...InputValue
+    }
+
     type {
       ...TypeRef
     }
-    defaultValue
   }
 
-  fragment TypeRef on __Type {
+  inputFields(includeDeprecated: true) {
+    ...InputValue
+  }
+
+  interfaces {
+    ...TypeRef
+  }
+
+  enumValues(includeDeprecated: true) {
+    name
+    description
+    isDeprecated
+    deprecationReason
+  }
+
+  possibleTypes {
+    ...TypeRef
+  }
+}
+
+fragment InputValue on __InputValue {
+  name
+  description
+  isDeprecated
+  deprecationReason
+
+  type { ...TypeRef }
+
+  defaultValue
+}
+
+fragment TypeRef on __Type {
+  kind
+  name
+  ofType {
     kind
     name
     ofType {
@@ -94,26 +114,11 @@ INTROSPECTION_QUERY = INTROSPECTION_QUERY = """
         ofType {
           kind
           name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-                ofType {
-                  kind
-                  name
-                }
-              }
-            }
-          }
         }
       }
     }
   }
+}
 """
 
 
