@@ -462,10 +462,15 @@ class Graphql(object):
                         "Int",
                         "Float",
                         "DateTime",
+                        "JSON",
+                        "JSONCamelCase",
+                        "JSONSnakeCase",
                     ]:
-                        # For custom scalar types (like JSONCamelCase), use the field name directly
-                        # instead of generating nested subselection
-                        subselection.append(field["name"])
+                        # Recursively generate subselection for nested objects
+                        nested_fields = Graphql.generate_field_subselection(
+                            schema, field["type"]
+                        )
+                        subselection.append(f"{field['name']} {{ {nested_fields}}}")
                     else:
                         subselection.append(field["name"])
                 else:
