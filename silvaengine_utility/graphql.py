@@ -336,6 +336,12 @@ class Graphql(object):
                     schema=schema,
                 )
 
+            Debugger.info(
+                variable=query,
+                stage=f"{__name__}:request_query",
+                delimiter="@",
+            )
+
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
                 function_name=function_name,
