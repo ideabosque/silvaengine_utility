@@ -83,33 +83,9 @@ fragment InputValue on __InputValue {
 fragment TypeRef on __Type {
   kind
   name
+  description
   ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-              }
-            }
-          }
-        }
-      }
-    }
+    ...TypeRef
   }
 }
 """
