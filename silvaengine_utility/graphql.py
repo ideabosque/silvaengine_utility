@@ -23,9 +23,10 @@ from .utility import Utility
 INTROSPECTION_QUERY = """
 query IntrospectionQuery {
   __schema {
-    queryType { name }
-    mutationType { name }
-    subscriptionType { name }
+    description
+    queryType           { name }
+    mutationType        { name }
+    subscriptionType    { name }
     types {
       ...FullType
     }
@@ -33,7 +34,8 @@ query IntrospectionQuery {
       name
       description
       locations
-      args {
+      isRepeatable
+      args(includeDeprecated: true) {
         ...InputValue
       }
     }
@@ -44,19 +46,20 @@ fragment FullType on __Type {
   kind
   name
   description
+  specifiedByURL
   fields(includeDeprecated: true) {
     name
     description
-    args {
+    isDeprecated
+    deprecationReason
+    args(includeDeprecated: true) {
       ...InputValue
     }
     type {
       ...TypeRef
     }
-    isDeprecated
-    deprecationReason
   }
-  inputFields {
+  inputFields(includeDeprecated: true) {
     ...InputValue
   }
   interfaces {
@@ -76,9 +79,9 @@ fragment FullType on __Type {
 fragment InputValue on __InputValue {
   name
   description
-  type {
-    ...TypeRef
-  }
+  isDeprecated
+  deprecationReason
+  type { ...TypeRef }
   defaultValue
 }
 
@@ -97,18 +100,6 @@ fragment TypeRef on __Type {
         ofType {
           kind
           name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-              }
-            }
-          }
         }
       }
     }
