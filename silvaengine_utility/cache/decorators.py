@@ -11,8 +11,7 @@ Provides various caching decorators optimized for different use cases:
 
 import functools
 import inspect
-import types
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from .hybrid_cache import HybridCacheEngine, default_cache
 from .object_cache import ObjectCacheEngine
