@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 import logging
+import traceback
 from enum import Enum
 from typing import Any, Callable, Dict, Optional, Union
 
@@ -219,6 +220,11 @@ class Graphql(object):
             if execution_result:
                 # Check for errors first - GraphQL can have both data and errors
                 if execution_result.errors:
+                    Debugger.info(
+                        variable=traceback.format_exc(),
+                        stage="Graphql Debug(execute)",
+                        setting=self.setting,
+                    )
                     return Graphql.error_response(
                         errors=[
                             Utility.format_error(e) for e in execution_result.errors
@@ -229,14 +235,14 @@ class Graphql(object):
                     return Graphql.success_response(data=execution_result.data)
 
             return Graphql.error_response(
-                errors="Uncaught execution error",
+                errors="Invalid execution result",
                 status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
         except Exception as e:
             Debugger.info(
                 variable=e,
                 stage="Graphql Debug(execute)",
-                logger=self.logger,
+                setting=self.setting,
             )
             return Graphql.error_response(
                 errors=str(e),
