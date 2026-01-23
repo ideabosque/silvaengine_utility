@@ -356,12 +356,6 @@ class Graphql(object):
                     schema=schema,
                 )
 
-            Debugger.info(
-                variable=query,
-                stage=f"{__name__}:request_query",
-                delimiter="@",
-            )
-
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
                 function_name=function_name,
@@ -409,6 +403,7 @@ class Graphql(object):
                 variable=e,
                 stage="Graphql Debug(request_graphql)",
                 delimiter="#",
+                setting=context.get("setting", {"debug_mode": True}),
             )
             raise e
 
