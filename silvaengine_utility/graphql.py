@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import functools
 import logging
-import traceback
 from enum import Enum
 from typing import Any, Callable, Dict, Optional, Union
 
@@ -221,8 +220,8 @@ class Graphql(object):
                 # Check for errors first - GraphQL can have both data and errors
                 if execution_result.errors:
                     Debugger.info(
-                        variable=traceback.format_exc(),
-                        stage="Graphql Debug(execute)",
+                        variable=execution_result.errors,
+                        stage="Graphql Debug(execute result)",
                         setting=self.setting,
                     )
                     return Graphql.error_response(
