@@ -16,6 +16,7 @@ class Debugger(object):
         delimiter_repetitions: int = 20,
         setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
+        enabled_trace: bool = True,
     ):
         debug_mode_key = "debug_mode"
         is_debug_mode = (
@@ -42,6 +43,9 @@ class Debugger(object):
 
             logger.info(template.format(mark="START:"))
             logger.info(f"{variable}")
-            logger.info(template.format(mark=f"{delimiter * 6}"))
-            logger.info(f"{traceback.format_stack()}")
+
+            if enabled_trace:
+                logger.info(template.format(mark=f"{delimiter * 6}"))
+                logger.info(f"{traceback.format_stack()}")
+
             logger.info(template.format(mark="END:"))

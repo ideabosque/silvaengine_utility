@@ -220,7 +220,7 @@ class Graphql(object):
                 # Check for errors first - GraphQL can have both data and errors
                 if execution_result.errors:
                     Debugger.info(
-                        variable=execution_result.errors,
+                        variable=f"Query: {query}, Variables: {params.get('variables', {})}, Errors: {execution_result.errors}",
                         stage="Graphql Debug(execute result)",
                         setting=self.setting,
                     )
