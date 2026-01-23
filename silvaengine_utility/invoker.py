@@ -209,11 +209,6 @@ class Invoker(object):
             "params": kwargs["params"],
         }
 
-        Debugger.info(
-            variable=f"Function: {function_name}, Payload: {payload}",
-            stage=__name__,
-        )
-
         response = aws_lambda.invoke(
             FunctionName=function_name,
             InvocationType=invocation_type,
