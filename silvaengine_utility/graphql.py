@@ -11,6 +11,7 @@ import boto3
 import graphene
 from graphene import Schema
 from graphql.language import ast
+
 from silvaengine_constants import HttpStatus
 
 from .context import Context
@@ -207,11 +208,15 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response(errors="Invalid operations")
 
+            variables = Serializer.json_handler.convert_decimal_to_number(
+                params.get("variables", {})
+            )
+
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
                     context_value=context,
-                    variable_values=params.get("variables", {}),
+                    variable_values=variables,
                     operation_name=params.get("operation_name"),
                 )
             )
