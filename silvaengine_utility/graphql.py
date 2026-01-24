@@ -199,6 +199,9 @@ class Graphql(object):
             context = {
                 "logger": self.logger,
                 "setting": self.setting,
+                "aws_api_key": params.get("api_key"),
+                "aws_api_stage": params.get("stage"),
+                "aws_api_area": params.get("area"),
                 "endpoint_id": params.get("endpoint_id"),
                 "connection_id": params.get("connection_id"),
                 "aws_lambda_arn": params.get("aws_lambda_arn"),

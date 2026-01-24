@@ -38,6 +38,22 @@ class Invoker(object):
         return inspect.ismethod(method)
 
     @staticmethod
+    def build_invoker_payload(
+        context: Dict[str, Any],
+        module_name: str,
+        function_name: str,
+        class_name: Optional[str],
+        parameters: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        return {
+            "context": context,
+            "module_name": str(module_name).strip(),
+            "function_name": str(function_name).strip(),
+            "class_name": class_name,
+            "parameters": parameters,
+        }
+
+    @staticmethod
     @object_cache
     def resolve_proxied_callable(
         module_name: str,
