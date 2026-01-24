@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 import logging
+import time
 from enum import Enum
 from typing import Any, Callable, Dict, Optional, Union
 
@@ -326,6 +327,8 @@ class Graphql(object):
         query: Optional[str] = None,
     ) -> dict[str, Any]:
         try:
+            start_time = time.perf_counter()
+
             execution_context = context.copy()
             module_name = str(module_name).strip()
             function_name = str(function_name).strip()
@@ -384,10 +387,19 @@ class Graphql(object):
             status_code = str(result.get("statusCode")).strip()
             result = result.get("body")
 
+            print(
+                f"\n{'~' * 20} Import and execute function `invoke_ask_model` spent {time.perf_counter() - start_time} s."
+            )
+            start_time = time.perf_counter()
+
             if not result:
                 return {}
             elif isinstance(result, str) or isinstance(result, bytes):
                 result = Serializer.json_loads(result)
+
+            print(
+                f"\n{'~' * 20} Execute `Serializer.json_loads` spent {time.perf_counter() - start_time} s."
+            )
 
             if status_code.startswith("20"):
                 if graphql_operation_name in result.get("data", {}):
