@@ -188,7 +188,14 @@ class Graphql(object):
     def execute(self, schema: Schema, **params: Dict[str, Any]) -> Any:
         if not isinstance(params, dict):
             raise ValueError("Invalid parameters")
+
         try:
+            Debugger.info(
+                variable=params,
+                stage=f"{__file__}.execute",
+                delimiter="=",
+                enabled_trace=False,
+            )
             context = {
                 "logger": self.logger,
                 "setting": self.setting,
