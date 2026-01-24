@@ -190,12 +190,6 @@ class Graphql(object):
             raise ValueError("Invalid parameters")
 
         try:
-            Debugger.info(
-                variable=params,
-                stage=f"{__file__}.execute",
-                delimiter="=",
-                enabled_trace=False,
-            )
             context = {
                 "logger": self.logger,
                 "setting": self.setting,
