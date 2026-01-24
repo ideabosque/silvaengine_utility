@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import functools
 import logging
+import threading
 import time
 from enum import Enum
 from typing import Any, Callable, Dict, Optional, Union
@@ -176,6 +177,10 @@ def graphql_service_initialization(func: Callable) -> Callable:
 
 
 class Graphql(object):
+    _graphql_schema_cache: Dict[str, Any] = {}
+    _graphql_query_cache: Dict[str, Any] = {}
+    _lock: threading.RLock = threading.RLock()
+
     @graphql_service_initialization
     def __init__(
         self,
@@ -352,16 +357,44 @@ class Graphql(object):
                 raise Exception("Missing `setting`, please pass it via `context`")
 
             if query is None:
-                schema = Graphql.get_graphql_schema(
-                    module_name=module_name,
-                    class_name=class_name,
-                )
+                query_cache_index = str(
+                    f"{graphql_operation_type}_{graphql_operation_name}"
+                ).lower()
 
-                query = Graphql.generate_graphql_operation(
-                    operation_name=graphql_operation_name,
-                    operation_type=graphql_operation_type,
-                    schema=schema,
-                )
+                query = Graphql._graphql_query_cache.get(query_cache_index)
+
+                if not query:
+                    schema_cache_index = str(f"{module_name}_{class_name}").lower()
+                    schema = Graphql._graphql_schema_cache.get(schema_cache_index)
+
+                    if not schema:
+                        schema = Graphql.get_graphql_schema(
+                            module_name=module_name,
+                            class_name=class_name,
+                        )
+
+                        with Graphql._lock:
+                            Graphql._graphql_schema_cache[schema_cache_index] = schema
+
+                    query = Graphql.generate_graphql_operation(
+                        operation_name=graphql_operation_name,
+                        operation_type=graphql_operation_type,
+                        schema=schema,
+                    )
+
+                    with Graphql._lock:
+                        Graphql._graphql_query_cache[query_cache_index] = query
+
+                # schema = Graphql.get_graphql_schema(
+                #     module_name=module_name,
+                #     class_name=class_name,
+                # )
+
+                # query = Graphql.generate_graphql_operation(
+                #     operation_name=graphql_operation_name,
+                #     operation_type=graphql_operation_type,
+                #     schema=schema,
+                # )
 
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
