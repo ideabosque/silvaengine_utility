@@ -197,10 +197,10 @@ class Graphql(object):
                 "aws_lambda_arn": params.get("aws_lambda_arn"),
             }
 
-            if isinstance(params.get("metadata"), dict) and "metadata" in params:
+            if isinstance(params.get("metadata"), dict):
                 context.update(**params.get("metadata", {}))
 
-            if isinstance(params.get("context"), dict) and "context" in params:
+            if isinstance(params.get("context"), dict):
                 context.update(**params.get("context", {}))
 
             query = params.get("query")
