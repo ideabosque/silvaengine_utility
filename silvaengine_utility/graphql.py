@@ -392,7 +392,7 @@ class Graphql(object):
             result = result.get("body")
 
             print(
-                f"\n{'~' * 20} Import and execute function `invoke_ask_model` spent {time.perf_counter() - start_time} s."
+                f"\n{'~' * 20} Import and execute function `{module_name}.{class_name}.{function_name}` spent {time.perf_counter() - start_time} s."
             )
             start_time = time.perf_counter()
 
