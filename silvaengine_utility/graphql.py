@@ -344,6 +344,8 @@ class Graphql(object):
             graphql_operation_type = str(graphql_operation_type).strip()
             graphql_operation_name = str(graphql_operation_name).strip()
 
+            debug_mark = f"{module_name}.{class_name}.{function_name}"
+
             if (
                 not module_name
                 or not function_name
@@ -384,17 +386,10 @@ class Graphql(object):
 
                     with Graphql._lock:
                         Graphql._graphql_query_cache[query_cache_index] = query
-
-                # schema = Graphql.get_graphql_schema(
-                #     module_name=module_name,
-                #     class_name=class_name,
-                # )
-
-                # query = Graphql.generate_graphql_operation(
-                #     operation_name=graphql_operation_name,
-                #     operation_type=graphql_operation_type,
-                #     schema=schema,
-                # )
+            print(
+                f"\n>>> Get graphql schema `{debug_mark}` spent {time.perf_counter() - start_time} s."
+            )
+            start_time = time.perf_counter()
 
             result = Invoker.resolve_proxied_callable(
                 module_name=module_name,
@@ -425,7 +420,7 @@ class Graphql(object):
             result = result.get("body")
 
             print(
-                f"\n{'~' * 20} Import and execute function `{module_name}.{class_name}.{function_name}` spent {time.perf_counter() - start_time} s."
+                f"\n>>> Execute function `{debug_mark}` spent {time.perf_counter() - start_time} s."
             )
             start_time = time.perf_counter()
 
@@ -435,7 +430,7 @@ class Graphql(object):
                 result = Serializer.json_loads(result)
 
             print(
-                f"\n{'~' * 20} Execute `Serializer.json_loads` spent {time.perf_counter() - start_time} s."
+                f"\n>>> Execute `{debug_mark} Serializer.json_loads` spent {time.perf_counter() - start_time} s."
             )
 
             if status_code.startswith("20"):
