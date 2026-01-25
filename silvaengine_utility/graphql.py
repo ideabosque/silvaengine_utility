@@ -335,154 +335,149 @@ class Graphql(object):
         variables: Optional[dict[str, Any]] = None,
         query: Optional[str] = None,
     ) -> dict[str, Any]:
-        try:
-            start_time = time.perf_counter()
+        if not all(
+            [
+                module_name,
+                function_name,
+                graphql_operation_name,
+                graphql_operation_type,
+                context,
+            ]
+        ):
+            raise ValueError("Missing required parameter(s)")
 
-            execution_context = context.copy()
-            module_name = str(module_name).strip()
-            function_name = str(function_name).strip()
-            graphql_operation_type = str(graphql_operation_type).strip()
-            graphql_operation_name = str(graphql_operation_name).strip()
+        if "setting" not in context:
+            raise ValueError("Missing `setting` in context")
 
-            debug_mark = f"{module_name}.{class_name}.{function_name}"
+        module_name = module_name.strip()
+        function_name = function_name.strip()
+        graphql_operation_type = graphql_operation_type.strip()
+        graphql_operation_name = graphql_operation_name.strip()
 
-            if (
-                not module_name
-                or not function_name
-                or not graphql_operation_name
-                or not graphql_operation_type
-                or not execution_context
-                or not isinstance(execution_context, dict)
-            ):
-                raise Exception("Missing required parameter(s)")
-            elif "setting" not in execution_context:
-                raise Exception("Missing `setting`, please pass it via `context`")
+        execution_context = context.copy()
+        settings = execution_context.pop("setting", {})
+        logger = execution_context.pop("logger", logging.getLogger(module_name))
+        constructor_parameters = {"logger": logger, **settings}
+        proxied_agent = Invoker.resolve_proxied_callable(
+            module_name=module_name,
+            class_name=class_name,
+            constructor_parameters=constructor_parameters,
+        )
 
-            if query is None:
-                query_cache_index = str(
-                    f"{graphql_operation_type}_{graphql_operation_name}"
-                ).lower()
+        if query is None:
+            schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
+            schema = Graphql._graphql_schema_cache.get(schema_cache_index)
 
-                query = Graphql._graphql_query_cache.get(query_cache_index)
+            if not schema:
+                schema_function = getattr(proxied_agent, "build_graphql_schema", None)
 
-                if not query:
-                    schema_cache_index = str(f"{module_name}_{class_name}").lower()
-                    schema = Graphql._graphql_schema_cache.get(schema_cache_index)
-
-                    if not schema:
-                        schema = Graphql.get_graphql_schema(
-                            module_name=module_name,
-                            class_name=class_name,
-                        )
-
-                        with Graphql._lock:
-                            Graphql._graphql_schema_cache[schema_cache_index] = schema
-
-                    query = Graphql.generate_graphql_operation(
-                        operation_name=graphql_operation_name,
-                        operation_type=graphql_operation_type,
-                        schema=schema,
+                if not schema_function or not callable(schema_function):
+                    raise ValueError(
+                        f"`{module_name}.{class_name}.build_graphql_schema` is not exists"
                     )
 
-                    with Graphql._lock:
-                        Graphql._graphql_query_cache[query_cache_index] = query
-            print(
-                f"\n>>> Get graphql schema `{debug_mark}` spent {time.perf_counter() - start_time} s."
+                schema_object = schema_function()
+
+                if not isinstance(schema_object, Schema):
+                    raise ValueError("Invalid schema")
+
+                result = schema_object.execute(INTROSPECTION_QUERY)
+
+                if result.errors:
+                    raise ValueError(f"Introspection query error: {result.errors}")
+
+                schema = result.data if result.data is not None else {}
+
+                if isinstance(schema, dict) and "__schema" in schema:
+                    schema = schema["__schema"]
+
+                with Graphql._lock:
+                    Graphql._graphql_schema_cache[schema_cache_index] = schema
+
+            query_cache_index = (
+                f"{graphql_operation_type}_{graphql_operation_name}".lower()
             )
-            start_time = time.perf_counter()
+            query = Graphql._graphql_query_cache.get(query_cache_index)
 
-            result = Invoker.resolve_proxied_callable(
-                module_name=module_name,
-                function_name=function_name,
-                class_name=class_name,
-                constructor_parameters={
-                    "logger": execution_context.pop(
-                        "logger", logging.getLogger(name=module_name)
-                    ),
-                    **execution_context.pop("setting", {}),
-                },
-            )(
-                **{
-                    "query": query,
-                    "variables": variables,
-                    "context": execution_context,
-                }
-            )
+            if not query:
+                query = Graphql.generate_graphql_operation(
+                    operation_name=graphql_operation_name,
+                    operation_type=graphql_operation_type,
+                    schema=schema,
+                )
 
-            if (
-                not isinstance(result, dict)
-                or "statusCode" not in result
-                or "body" not in result
-            ):
-                raise Exception(f"Invalid response structure: {result}")
+                with Graphql._lock:
+                    Graphql._graphql_query_cache[query_cache_index] = query
 
-            status_code = str(result.get("statusCode")).strip()
-            result = result.get("body")
+        proxied_function = getattr(proxied_agent, function_name, None)
 
-            print(
-                f"\n>>> Execute function `{debug_mark}` spent {time.perf_counter() - start_time} s."
-            )
-            start_time = time.perf_counter()
-
-            if not result:
-                return {}
-            elif isinstance(result, str) or isinstance(result, bytes):
-                result = Serializer.json_loads(result)
-
-            print(
-                f"\n>>> Execute `{debug_mark} Serializer.json_loads` spent {time.perf_counter() - start_time} s."
+        if not proxied_function or not callable(proxied_function):
+            raise ValueError(
+                f"`{module_name}.{class_name}.{proxied_function}` is not exists or uncallable"
             )
 
-            if status_code.startswith("20"):
-                if graphql_operation_name in result.get("data", {}):
-                    return result.get("data").get(graphql_operation_name)
-                return {}
-            elif "errors" in result:
-                raise Exception(f"Request graphql error: {result.get('errors')}")
-            else:
-                raise Exception(f"Request graphql error with status: {status_code}")
+        result = proxied_function(
+            **{
+                "query": query,
+                "variables": variables,
+                "context": execution_context,
+            }
+        )
 
-        except Exception as e:
-            Debugger.info(
-                variable=e,
-                stage="Graphql Debug(request_graphql)",
-                delimiter="#",
-                setting=context.get("setting", {"debug_mode": True}),
-            )
-            raise e
+        if (
+            not isinstance(result, dict)
+            or "statusCode" not in result
+            or "body" not in result
+        ):
+            raise ValueError(f"Invalid response structure: {result}")
+
+        status_code = str(result.get("statusCode")).strip()
+        result_body = result.get("body")
+
+        if not result_body:
+            return {}
+
+        if isinstance(result_body, (str, bytes)):
+            result_body = Serializer.json_loads(result_body)
+
+        if status_code.startswith("20"):
+            return result_body.get("data", {}).get(graphql_operation_name, {})
+        elif "errors" in result_body:
+            raise ValueError(f"Request graphql error: {result_body.get('errors')}")
+        else:
+            raise ValueError(f"Request graphql error with status: {status_code}")
 
     @staticmethod
     def get_graphql_schema(
         module_name: str,
         class_name: str | None = None,
     ) -> dict[str, Any]:
-        try:
-            schema_cache_index = str(f"{module_name}_{class_name}").lower()
-            schema = Graphql._graphql_schema_cache.get(schema_cache_index)
+        schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
+        schema = Graphql._graphql_schema_cache.get(schema_cache_index)
 
-            if not schema:
-                schema_object = Invoker.resolve_proxied_callable(
-                    module_name=module_name,
-                    class_name=class_name,
-                    function_name="build_graphql_schema",
-                )()
-
-                result = schema_object.execute(INTROSPECTION_QUERY)
-
-                if result.errors:
-                    raise Exception(f"Introspection query error: {result.errors}")
-
-                schema = result.data if result.data is not None else {}
-
-                if isinstance(schema, dict) and "__schema" in schema:
-                    schema = schema.get("__schema", {})
-
-                with Graphql._lock:
-                    Graphql._graphql_query_cache[schema_cache_index] = schema
-
+        if schema:
             return schema
-        except Exception as e:
-            raise e
+
+        schema_object = Invoker.resolve_proxied_callable(
+            module_name=module_name,
+            class_name=class_name,
+            function_name="build_graphql_schema",
+        )()
+
+        result = schema_object.execute(INTROSPECTION_QUERY)
+
+        if result.errors:
+            raise ValueError(f"Introspection query error: {result.errors}")
+
+        schema = result.data if result.data is not None else {}
+
+        if isinstance(schema, dict) and "__schema" in schema:
+            schema = schema["__schema"]
+
+        with Graphql._lock:
+            Graphql._graphql_schema_cache[schema_cache_index] = schema
+
+        return schema
 
     @staticmethod
     def extract_available_fields(
