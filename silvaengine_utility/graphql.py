@@ -462,21 +462,28 @@ class Graphql(object):
         class_name: str | None = None,
     ) -> dict[str, Any]:
         try:
-            schema_object = Invoker.resolve_proxied_callable(
-                module_name=module_name,
-                class_name=class_name,
-                function_name="build_graphql_schema",
-            )()
+            schema_cache_index = str(f"{module_name}_{class_name}").lower()
+            schema = Graphql._graphql_schema_cache.get(schema_cache_index)
 
-            result = schema_object.execute(INTROSPECTION_QUERY)
+            if not schema:
+                schema_object = Invoker.resolve_proxied_callable(
+                    module_name=module_name,
+                    class_name=class_name,
+                    function_name="build_graphql_schema",
+                )()
 
-            if result.errors:
-                raise Exception(f"Introspection query error: {result.errors}")
+                result = schema_object.execute(INTROSPECTION_QUERY)
 
-            schema = result.data if result.data is not None else {}
+                if result.errors:
+                    raise Exception(f"Introspection query error: {result.errors}")
 
-            if isinstance(schema, dict) and "__schema" in schema:
-                return schema.get("__schema", {})
+                schema = result.data if result.data is not None else {}
+
+                if isinstance(schema, dict) and "__schema" in schema:
+                    schema = schema.get("__schema", {})
+
+                with Graphql._lock:
+                    Graphql._graphql_query_cache[schema_cache_index] = schema
 
             return schema
         except Exception as e:
