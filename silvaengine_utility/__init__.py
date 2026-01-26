@@ -41,6 +41,7 @@ __all__ = [
     "JSONCamelCase",
     "JSONSnakeCase",
     "KeyStyle",
+    "SafeFloat",
     "Utility",
     "Struct",
     "HybridCacheEngine",
@@ -85,6 +86,7 @@ from .graphql import (
     JSONCamelCase,
     JSONSnakeCase,
     KeyStyle,
+    SafeFloat,
 )
 from .http import HttpResponse
 from .invoker import Invoker
