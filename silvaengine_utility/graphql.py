@@ -6,6 +6,7 @@ import functools
 import logging
 import threading
 import time
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Callable, Dict, Optional, Union
 
@@ -718,10 +719,10 @@ class JSON(graphene.Scalar):
         """
         if isinstance(value, (str, bool, int, float)):
             return value.__class__(value)
-        elif isinstance(value, (list, dict)):
-            return value
-        else:
-            return None
+        elif isinstance(value, Decimal):
+            return float(value)
+
+        return value
 
     def _get_reversed_key_style(self) -> KeyStyle:
         if self._key_style == KeyStyle.CAMEL:
@@ -827,3 +828,32 @@ class JSONSnakeCase(JSON):
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
         return JSON.parse_literal(node)
+
+
+class SafeFloat(graphene.Scalar):
+    """Custom Float Scalar with automatic conversion from Decimal to float"""
+
+    @staticmethod
+    def serialize(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        # 兼容原生 int/float
+        elif isinstance(value, (int, float)):
+            return float(value)
+        raise ValueError(f"Invalid Float value: {value}")
+
+    @staticmethod
+    def parse_literal(node):
+        if isinstance(node, ast.FloatValue):
+            return float(node.value)
+        if isinstance(node, ast.IntValue):
+            return float(node.value)
+        raise ValueError(f"Invalid Float literal: {node}")
+
+    @staticmethod
+    def parse_value(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        elif isinstance(value, (int, float)):
+            return float(value)
+        raise ValueError(f"Invalid Float value: {value}")
