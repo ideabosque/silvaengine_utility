@@ -335,6 +335,7 @@ class Graphql(object):
         variables: Optional[dict[str, Any]] = None,
         query: Optional[str] = None,
     ) -> dict[str, Any]:
+        start_time = time.perf_counter()
         if not all(
             [
                 module_name,
@@ -439,6 +440,10 @@ class Graphql(object):
 
         if isinstance(result_body, (str, bytes)):
             result_body = Serializer.json_loads(result_body)
+
+        print(
+            f"{'=>' * 10} Execute `request_graphql` spent {(time.perf_counter() - start_time):.6f} s."
+        )
 
         if status_code.startswith("20"):
             return result_body.get("data", {}).get(graphql_operation_name, {})
