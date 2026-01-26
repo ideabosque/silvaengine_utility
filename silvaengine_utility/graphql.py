@@ -443,7 +443,7 @@ class Graphql(object):
             result_body = Serializer.json_loads(result_body)
 
         print(
-            f"{'=>' * 10} Execute `request_graphql` spent {(time.perf_counter() - start_time):.6f} s."
+            f"{'=>' * 10} Execute `{graphql_operation_type} {graphql_operation_name}({module_name}.{class_name}.{function_name})` spent {(time.perf_counter() - start_time):.6f}s."
         )
 
         if status_code.startswith("20"):
