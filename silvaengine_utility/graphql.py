@@ -719,10 +719,12 @@ class JSON(graphene.Scalar):
         """
         if isinstance(value, (str, bool, int, float)):
             return value.__class__(value)
+        elif isinstance(value, (list, dict)):
+            return value
         elif isinstance(value, Decimal):
             return float(value)
-
-        return value
+        else:
+            return None
 
     def _get_reversed_key_style(self) -> KeyStyle:
         if self._key_style == KeyStyle.CAMEL:
