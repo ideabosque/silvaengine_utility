@@ -8,12 +8,12 @@ import threading
 import time
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
 import graphene
 from graphene import Schema
-from graphql import get_introspection_query
+from graphql import ExecutionResult, build_client_schema, get_introspection_query
 from graphql.language import ast
 from silvaengine_constants import HttpStatus
 
@@ -357,23 +357,16 @@ class Graphql(object):
         module_name: str,
         class_name: str | None = None,
     ) -> dict[str, Any]:
-        module_name = module_name.strip()
-
-        if not module_name:
-            raise ValueError("Missing required parameter(s)")
-
         cache_index = f"{module_name}_{str(class_name).strip() or 'default'}".lower()
         schema = Graphql._graphql_schema_cache.get(cache_index)
 
         if schema:
             return schema
 
-        schema_scanner = Invoker.resolve_proxied_callable(
+        result = Graphql._get_graphql_schema(
             module_name=module_name,
             class_name=class_name,
-            function_name="build_graphql_schema",
-        )()
-        result = schema_scanner.execute(get_introspection_query())
+        )
 
         if not result:
             raise ValueError("Invalid schema introspection")
@@ -389,6 +382,58 @@ class Graphql(object):
             Graphql._graphql_schema_cache[cache_index] = schema
 
         return schema
+
+    @staticmethod
+    def get_schema_root_fields(
+        module_name: str,
+        class_name: Optional[str] = None,
+        types: Optional[List[str]] = None,
+    ) -> Dict[str, List[Dict]]:
+        result = Graphql._get_graphql_schema(
+            module_name=module_name,
+            class_name=class_name,
+        )
+
+        if result.errors:
+            raise ValueError(f"Failed to query introspection: {result.errors}")
+        elif not hasattr(result, "data"):
+            raise ValueError("Invalid introspection result")
+
+        client_schema = build_client_schema(introspection=result.data)
+
+        if not types or len(types) < 1:
+            types = ["Query", "Mutation", "Subscription"]
+
+        fields: Dict[str, List[Dict]] = {t: [] for t in types}
+
+        for operation in types:
+            meta = getattr(client_schema, f"{operation.lower()}_type", None)
+
+            if not meta:
+                continue
+
+            for field in getattr(meta, "fields", []):
+                fields[operation].append(field)
+
+        return fields
+
+    @staticmethod
+    def _get_graphql_schema(
+        module_name: str,
+        class_name: Optional[str] = None,
+    ) -> ExecutionResult:
+        module_name = module_name.strip()
+
+        if not module_name:
+            raise ValueError("Missing required parameter(s)")
+
+        schema_scanner = Invoker.resolve_proxied_callable(
+            module_name=module_name,
+            class_name=class_name,
+            function_name="build_graphql_schema",
+        )()
+
+        return schema_scanner.execute(get_introspection_query())
 
     @staticmethod
     def extract_available_fields(
