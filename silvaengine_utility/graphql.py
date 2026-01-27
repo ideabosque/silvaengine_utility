@@ -179,7 +179,7 @@ def graphql_service_initialization(func: Callable) -> Callable:
 
 class Graphql(object):
     _graphql_schema_cache: Dict[str, Any] = {}
-    _graphql_query_cache: Dict[str, Any] = {}
+    _graphql_query_cache: Dict[str, str] = {}
     _lock: threading.RLock = threading.RLock()
 
     @graphql_service_initialization
@@ -458,8 +458,13 @@ class Graphql(object):
         module_name: str,
         class_name: str | None = None,
     ) -> dict[str, Any]:
-        schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
-        schema = Graphql._graphql_schema_cache.get(schema_cache_index)
+        module_name = module_name.strip()
+
+        if not module_name:
+            raise ValueError("Missing required parameter(s)")
+
+        cache_index = f"{module_name}_{str(class_name).strip() or 'default'}".lower()
+        schema = Graphql._graphql_schema_cache.get(cache_index)
 
         if schema:
             return schema
@@ -472,7 +477,9 @@ class Graphql(object):
 
         result = schema_object.execute(INTROSPECTION_QUERY)
 
-        if result.errors:
+        if not result:
+            raise ValueError("Invalid schema introspection")
+        elif result.errors:
             raise ValueError(f"Introspection query error: {result.errors}")
 
         schema = result.data if result.data is not None else {}
@@ -481,7 +488,7 @@ class Graphql(object):
             schema = schema["__schema"]
 
         with Graphql._lock:
-            Graphql._graphql_schema_cache[schema_cache_index] = schema
+            Graphql._graphql_schema_cache[cache_index] = schema
 
         return schema
 
@@ -517,6 +524,7 @@ class Graphql(object):
                         "JSON",
                         "JSONCamelCase",
                         "JSONSnakeCase",
+                        "SafeFloat",
                     ]:
                         # Recursively generate subselection for nested objects
                         nested_fields = Graphql.generate_field_subselection(
@@ -571,8 +579,21 @@ class Graphql(object):
 
     @staticmethod
     def generate_graphql_operation(
-        operation_name: str, operation_type: str, schema: dict[str, Any]
+        operation_name: str,
+        operation_type: str,
+        schema: dict[str, Any],
     ) -> str:
+        if not all([operation_name, operation_type]):
+            raise ValueError("Invalid arguments")
+
+        operation_name = operation_name.strip()
+        operation_type = operation_type.strip()
+        cache_index = f"{operation_type.lower()}_{operation_name.lower()}"
+        query = Graphql._graphql_query_cache.get(cache_index)
+
+        if not query:
+            return query
+
         def format_type(field_type: dict[str, Any]) -> str:
             """Format the GraphQL type."""
             if field_type["kind"] == "NON_NULL":
@@ -615,16 +636,22 @@ class Graphql(object):
             else ""
         )
 
-        if not variable_definitions and not argument_usage and not field_string:
-            return f"""{operation_type.lower()} {operation_name} {{{operation_name}}}"""
+        with Graphql._lock:
+            if not variable_definitions and not argument_usage and not field_string:
+                Graphql._graphql_query_cache[cache_index] = (
+                    f"""{operation_type.lower()} {operation_name} {{{operation_name}}}"""
+                )
+                return Graphql._graphql_query_cache.get(cache_index)
 
-        return f"""
-        {operation_type.lower()} {operation_name}({variable_definitions}) {{
-            {operation_name}({argument_usage}) {{
-                {field_string}
+            Graphql._graphql_query_cache[cache_index] = f"""
+            {operation_type.lower()} {operation_name}({variable_definitions}) {{
+                {operation_name}({argument_usage}) {{
+                    {field_string}
+                }}
             }}
-        }}
-        """
+            """
+
+            return Graphql._graphql_query_cache.get(cache_index)
 
 
 class KeyStyle(Enum):
