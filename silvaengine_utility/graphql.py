@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Optional, Union
 import boto3
 import graphene
 from graphene import Schema
+from graphql import get_introspection_query
 from graphql.language import ast
 from silvaengine_constants import HttpStatus
 
@@ -22,108 +23,6 @@ from .http import HttpResponse
 from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
-
-INTROSPECTION_QUERY = """
-query IntrospectionQuery {
-  __schema {
-    queryType { name }
-    mutationType { name }
-    subscriptionType { name }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
-  }
-}
-
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
-    name
-    description
-    args {
-      ...InputValue
-    }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
-  }
-}
-
-fragment InputValue on __InputValue {
-  name
-  description
-  type { ...TypeRef }
-  defaultValue
-}
-
-fragment TypeRef on __Type {
-  kind
-  name
-  description
-  ofType {
-    kind
-    name
-    description
-    ofType {
-      kind
-      name
-      description
-      ofType {
-        kind
-        name
-        description
-        ofType {
-          kind
-          name
-          description
-          ofType {
-            kind
-            name
-            description
-            ofType {
-              kind
-              name
-              description
-              ofType {
-                kind
-                name
-                description
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
 
 
 def graphql_service_initialization(func: Callable) -> Callable:
@@ -312,7 +211,7 @@ class Graphql(object):
         schema = Graphql.execute_graphql_query(
             context,
             funct,
-            query=INTROSPECTION_QUERY,
+            query=get_introspection_query(),
             aws_lambda=aws_lambda,
         )
 
@@ -383,7 +282,7 @@ class Graphql(object):
                 if not isinstance(schema_object, Schema):
                     raise ValueError("Invalid schema")
 
-                result = schema_object.execute(INTROSPECTION_QUERY)
+                result = schema_object.execute(get_introspection_query())
 
                 if result.errors:
                     raise ValueError(f"Introspection query error: {result.errors}")
@@ -469,13 +368,12 @@ class Graphql(object):
         if schema:
             return schema
 
-        schema_object = Invoker.resolve_proxied_callable(
+        schema_scanner = Invoker.resolve_proxied_callable(
             module_name=module_name,
             class_name=class_name,
             function_name="build_graphql_schema",
         )()
-
-        result = schema_object.execute(INTROSPECTION_QUERY)
+        result = schema_scanner.execute(get_introspection_query())
 
         if not result:
             raise ValueError("Invalid schema introspection")
