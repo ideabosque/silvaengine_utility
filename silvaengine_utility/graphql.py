@@ -591,7 +591,7 @@ class Graphql(object):
         cache_index = f"{operation_type.lower()}_{operation_name.lower()}"
         query = Graphql._graphql_query_cache.get(cache_index)
 
-        if not query:
+        if query:
             return query
 
         def format_type(field_type: dict[str, Any]) -> str:
