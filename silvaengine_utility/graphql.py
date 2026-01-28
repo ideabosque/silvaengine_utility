@@ -809,7 +809,6 @@ class SafeFloat(graphene.Scalar):
     def serialize(value):
         if isinstance(value, Decimal):
             return float(value)
-        # 兼容原生 int/float
         elif isinstance(value, (int, float)):
             return float(value)
         raise ValueError(f"Invalid Float value: {value}")
