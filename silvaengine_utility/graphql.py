@@ -252,7 +252,7 @@ class Graphql(object):
             raise ValueError("Missing `setting` in context")
 
         execution_context = context.copy()
-        query = query if str(query).strip() else ""
+        query = query if isinstance(query, str) and str(query).strip() else ""
         module_name = str(module_name).strip()
         function_name = str(function_name).strip()
         operation_name = str(operation_name).strip()
@@ -265,6 +265,7 @@ class Graphql(object):
             class_name=class_name,
             constructor_parameters=constructor_parameters,
         )
+        call_chain = f"{operation_type} {operation_name}({module_name}.{class_name}.{function_name})"
 
         if not query:
             schema_picker = execution_context.get("graphql_schema_picker")
@@ -278,6 +279,8 @@ class Graphql(object):
                 )
 
         if not query:
+            logging.warning(f"Introspection query `{call_chain}`")
+
             schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
             schema = Graphql._graphql_schema_cache.get(schema_cache_index)
 
@@ -352,7 +355,7 @@ class Graphql(object):
             result_body = Serializer.json_loads(result_body)
 
         print(
-            f"{'=>' * 10} Execute `{operation_type} {operation_name}({module_name}.{class_name}.{function_name})` spent {(time.perf_counter() - start_time):.6f}s."
+            f"{'=>' * 10} Execute `{call_chain}` spent {(time.perf_counter() - start_time):.6f}s."
         )
 
         if status_code.startswith("20"):
