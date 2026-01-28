@@ -40,7 +40,6 @@ __all__ = [
     "JSON",
     "JSONCamelCase",
     "JSONSnakeCase",
-    "KeyStyle",
     "SafeFloat",
     "Utility",
     "Struct",
@@ -85,7 +84,6 @@ from .graphql import (
     Graphql,
     JSONCamelCase,
     JSONSnakeCase,
-    KeyStyle,
     SafeFloat,
 )
 from .http import HttpResponse

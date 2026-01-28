@@ -8,14 +8,14 @@ import threading
 import time
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Union
 
 import boto3
 import graphene
 from graphene import Schema
 from graphql import ExecutionResult, build_client_schema, get_introspection_query
 from graphql.language import ast
-from silvaengine_constants import HttpStatus
+from silvaengine_constants import HttpStatus, NamingConvention, OperationType
 
 from .context import Context
 from .debugger import Debugger
@@ -229,20 +229,21 @@ class Graphql(object):
         context: dict[str, Any],
         module_name: str,
         function_name: str,
-        graphql_operation_type: str,
-        graphql_operation_name: str,
-        class_name: str | None = None,
-        variables: Optional[dict[str, Any]] = None,
+        operation_name: str,
+        operation_type: str = OperationType.QUERY.value,
         query: Optional[str] = None,
+        class_name: Optional[str] = None,
+        variables: Optional[dict[str, Any]] = None,
+        enable_preferred_custom_query: bool = True,
     ) -> dict[str, Any]:
         start_time = time.perf_counter()
+
         if not all(
             [
                 module_name,
                 function_name,
-                graphql_operation_name,
-                graphql_operation_type,
                 context,
+                operation_name,
             ]
         ):
             raise ValueError("Missing required parameter(s)")
@@ -250,12 +251,12 @@ class Graphql(object):
         if "setting" not in context:
             raise ValueError("Missing `setting` in context")
 
-        module_name = module_name.strip()
-        function_name = function_name.strip()
-        graphql_operation_type = graphql_operation_type.strip()
-        graphql_operation_name = graphql_operation_name.strip()
-
         execution_context = context.copy()
+        query = query if str(query).strip() else ""
+        module_name = str(module_name).strip()
+        function_name = str(function_name).strip()
+        operation_name = str(operation_name).strip()
+        operation_type = OperationType.get(operation_type).value
         settings = execution_context.pop("setting", {})
         logger = execution_context.pop("logger", logging.getLogger(module_name))
         constructor_parameters = {"logger": logger, **settings}
@@ -265,7 +266,18 @@ class Graphql(object):
             constructor_parameters=constructor_parameters,
         )
 
-        if query is None:
+        if not query:
+            schema_picker = execution_context.get("graphql_schema_picker")
+
+            if schema_picker and callable(schema_picker):
+                query = schema_picker(
+                    operation_type=operation_type,
+                    operation_name=operation_name,
+                    module_name=module_name,
+                    enable_preferred_custom_schema=enable_preferred_custom_query,
+                )
+
+        if not query:
             schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
             schema = Graphql._graphql_schema_cache.get(schema_cache_index)
 
@@ -295,15 +307,13 @@ class Graphql(object):
                 with Graphql._lock:
                     Graphql._graphql_schema_cache[schema_cache_index] = schema
 
-            query_cache_index = (
-                f"{graphql_operation_type}_{graphql_operation_name}".lower()
-            )
+            query_cache_index = f"{operation_type}_{operation_name}".lower()
             query = Graphql._graphql_query_cache.get(query_cache_index)
 
             if not query:
                 query = Graphql.generate_graphql_operation(
-                    operation_name=graphql_operation_name,
-                    operation_type=graphql_operation_type,
+                    operation_name=operation_name,
+                    operation_type=operation_type,
                     schema=schema,
                 )
 
@@ -342,11 +352,11 @@ class Graphql(object):
             result_body = Serializer.json_loads(result_body)
 
         print(
-            f"{'=>' * 10} Execute `{graphql_operation_type} {graphql_operation_name}({module_name}.{class_name}.{function_name})` spent {(time.perf_counter() - start_time):.6f}s."
+            f"{'=>' * 10} Execute `{operation_type} {operation_name}({module_name}.{class_name}.{function_name})` spent {(time.perf_counter() - start_time):.6f}s."
         )
 
         if status_code.startswith("20"):
-            return result_body.get("data", {}).get(graphql_operation_name, {})
+            return result_body.get("data", {}).get(operation_name, {})
         elif "errors" in result_body:
             raise ValueError(f"Request graphql error: {result_body.get('errors')}")
         else:
@@ -597,13 +607,6 @@ class Graphql(object):
             return Graphql._graphql_query_cache.get(cache_index)
 
 
-class KeyStyle(Enum):
-    """Enumeration for JSON key naming styles."""
-
-    CAMEL = 0
-    SNAKE = 1
-
-
 class JSON(graphene.Scalar):
     """
     JSON scalar type for GraphQL with dynamic key style support.
@@ -618,10 +621,10 @@ class JSON(graphene.Scalar):
     - Type safety with proper validation
 
     Attributes:
-        _key_style: Current key style (KeyStyle.CAMEL or KeyStyle.SNAKE)
+        _key_style: Current key style (NamingConvention.CAMEL or NamingConvention.SNAKE)
     """
 
-    _key_style: KeyStyle = KeyStyle.CAMEL
+    _key_style: NamingConvention = NamingConvention.CAMEL
 
     @classmethod
     def camel_case(cls) -> "JSON":
@@ -631,7 +634,7 @@ class JSON(graphene.Scalar):
             JSON scalar instance configured for camelCase output
         """
         instance = cls()
-        instance._key_style = KeyStyle.CAMEL
+        instance._key_style = NamingConvention.CAMEL
         return instance
 
     @classmethod
@@ -642,19 +645,19 @@ class JSON(graphene.Scalar):
             JSON scalar instance configured for snake_case output
         """
         instance = cls()
-        instance._key_style = KeyStyle.SNAKE
+        instance._key_style = NamingConvention.SNAKE
         return instance
 
     @staticmethod
     def transform_dict_keys(
         data: Any,
-        key_style: KeyStyle = KeyStyle.CAMEL,
+        key_style: NamingConvention = NamingConvention.CAMEL,
     ) -> Any:
         """Recursively convert all keys in JSON data to specified naming style.
 
         Args:
             data: Input data (dict, list, or primitive type)
-            key_style: Target naming style - KeyStyle.CAMEL or KeyStyle.SNAKE
+            key_style: Target naming style - NamingConvention.CAMEL or NamingConvention.SNAKE
 
         Returns:
             Data with all keys converted to specified style
@@ -667,7 +670,7 @@ class JSON(graphene.Scalar):
             result = {}
             convert_func = (
                 Utility.to_camel_case
-                if key_style == KeyStyle.CAMEL
+                if key_style == NamingConvention.CAMEL
                 else Utility.to_snake_case
             )
             for k, v in data.items():
@@ -696,10 +699,10 @@ class JSON(graphene.Scalar):
         else:
             return None
 
-    def _get_reversed_key_style(self) -> KeyStyle:
-        if self._key_style == KeyStyle.CAMEL:
-            return KeyStyle.SNAKE
-        return KeyStyle.CAMEL
+    def _get_reversed_key_style(self) -> NamingConvention:
+        if self._key_style == NamingConvention.CAMEL:
+            return NamingConvention.SNAKE
+        return NamingConvention.CAMEL
 
     def serialize(self, value: Any) -> Any:
         """Serialize value to JSON with key style conversion.
@@ -757,7 +760,7 @@ class JSON(graphene.Scalar):
 class JSONCamelCase(JSON):
     """JSON scalar with `camelCase` key style."""
 
-    _key_style: KeyStyle = KeyStyle.CAMEL
+    _key_style: NamingConvention = NamingConvention.CAMEL
 
     @staticmethod
     def identity(value: Any) -> Any:
@@ -766,12 +769,12 @@ class JSONCamelCase(JSON):
     @staticmethod
     def serialize(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.CAMEL)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.CAMEL)
 
     @staticmethod
     def parse_value(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.SNAKE)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.SNAKE)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
@@ -781,7 +784,7 @@ class JSONCamelCase(JSON):
 class JSONSnakeCase(JSON):
     """JSON scalar with `snake_case` key style."""
 
-    _key_style: KeyStyle = KeyStyle.SNAKE
+    _key_style: NamingConvention = NamingConvention.SNAKE
 
     @staticmethod
     def identity(value: Any) -> Any:
@@ -790,12 +793,12 @@ class JSONSnakeCase(JSON):
     @staticmethod
     def serialize(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.SNAKE)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.SNAKE)
 
     @staticmethod
     def parse_value(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.CAMEL)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.CAMEL)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
