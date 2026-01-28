@@ -273,7 +273,7 @@ class Graphql(object):
             schema_picker = execution_context.get("graphql_schema_picker")
 
             Debugger.info(
-                variable=f"schema_picker and callable(schema_picker): {schema_picker and callable(schema_picker)}",
+                variable=f"schema_picker and callable(schema_picker): {bool(schema_picker and callable(schema_picker))}",
                 stage=f"{__file__}.request_graphql.schema_picker",
             )
 
