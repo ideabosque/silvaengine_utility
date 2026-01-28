@@ -117,6 +117,8 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response(errors="Invalid operations")
 
+            Debugger.info(variable=context, stage=f"{__file__}.execute.context")
+
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
@@ -270,7 +272,16 @@ class Graphql(object):
         if not query:
             schema_picker = execution_context.get("graphql_schema_picker")
 
+            Debugger.info(
+                variable=f"schema_picker and callable(schema_picker): {schema_picker and callable(schema_picker)}",
+                stage=f"{__file__}.request_graphql.schema_picker",
+            )
+
             if schema_picker and callable(schema_picker):
+                Debugger.info(
+                    variable=f"Fetch schema from database: {call_chain}",
+                    stage=f"{__file__}.request_graphql.get_schema",
+                )
                 query = schema_picker(
                     operation_type=operation_type,
                     operation_name=operation_name,
