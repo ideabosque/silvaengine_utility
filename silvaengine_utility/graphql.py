@@ -348,19 +348,17 @@ class Graphql(object):
 
         duration = time.perf_counter() - start_time
 
-        if duration>10:
+        if duration > 10:
             Debugger.info(
                 variable={
                     "query": query,
                     "variables": variables,
                     "context": execution_context,
                 },
-                stage=f"{__file__}.request_graphql"，
+                stage=f"{__file__}.request_graphql",
             )
 
-        print(
-            f"{'>' * 30} Request `{call_chain}` spent {duration:.6f}s."
-        )
+        print(f"{'>' * 30} Request `{call_chain}` spent {duration:.6f}s.")
 
         if (
             not isinstance(result, dict)
