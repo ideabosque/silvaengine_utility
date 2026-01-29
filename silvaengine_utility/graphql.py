@@ -271,17 +271,23 @@ class Graphql(object):
             schema_picker = execution_context.get("graphql_schema_picker")
 
             logging.info(
-                f"schema_picker and callable(schema_picker): {bool(schema_picker and callable(schema_picker))}, Call chain: {call_chain}"
+                f">>> schema_picker and callable(schema_picker): {bool(schema_picker and callable(schema_picker))}, Call chain: {call_chain}"
             )
 
             if schema_picker and callable(schema_picker):
-                logging.info(f"Fetch schema from database: {call_chain}")
+                logging.info(f">>> Fetch schema from database: {call_chain}")
 
                 query = schema_picker(
                     operation_type=operation_type,
                     operation_name=operation_name,
                     module_name=module_name,
                     enable_preferred_custom_schema=enable_preferred_custom_query,
+                )
+
+                Debugger.info(
+                    variable=query,
+                    stage="request_graqhql",
+                    delimiter="~",
                 )
 
         if not query:
@@ -467,14 +473,16 @@ class Graphql(object):
         raise Exception(f"Type '{type_name}' not found in schema.")
 
     @staticmethod
-    def get_real_field_data(
-        field: dict[str, Any]
-    ) -> dict[str, Any]:
+    def get_real_field_data(field: dict[str, Any]) -> dict[str, Any]:
         if field["name"] == "edges":
             return {
                 "name": field["name"],
-                "type": (field["type"].get("ofType") or {}).get("ofType", {}).get("name"),
-                "kind": (field["type"].get("ofType") or {}).get("ofType", {}).get("kind"),
+                "type": (field["type"].get("ofType") or {})
+                .get("ofType", {})
+                .get("name"),
+                "kind": (field["type"].get("ofType") or {})
+                .get("ofType", {})
+                .get("kind"),
             }
         if field["name"] == "pageInfo":
             return {
