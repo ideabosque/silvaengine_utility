@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import print_function
+
 from typing import Any, Dict, Optional, Union
 
 from .datetime_handler import PendulumDateTimeHandler
@@ -70,7 +71,7 @@ class Serializer(object):
                 "created_at": datetime.now(),
                 "items": [Decimal("10"), Decimal("20.5")]
             }
-            normalized = Utility.json_normalize(data)
+            normalized = Serializer.json_normalize(data)
             # Result: Decimal -> float -> Decimal, datetime -> ISO string -> datetime
         """
         return Serializer.json_handler.json_normalize(

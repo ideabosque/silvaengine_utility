@@ -11,7 +11,7 @@ Provides various caching decorators optimized for different use cases:
 
 import functools
 import inspect
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from .hybrid_cache import HybridCacheEngine, default_cache
 from .object_cache import ObjectCacheEngine
@@ -168,7 +168,10 @@ def method_cache(
         return ":".join(key_parts)
 
     return hybrid_cache(
-        ttl=ttl, cache_name=cache_name, key_generator=key_gen, cache_enabled=cache_enabled
+        ttl=ttl,
+        cache_name=cache_name,
+        key_generator=key_gen,
+        cache_enabled=cache_enabled,
     )
 
 
@@ -202,12 +205,12 @@ def object_cache(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> Any:
         def get_invoker(*args, **kwargs):
-            module_name = kwargs.get("module_name", "")
-            function_name = kwargs.get("function_name", "")
-            class_name = kwargs.get("class_name")
+            module_name = str(kwargs.get("module_name", "")).strip()
+            function_name = str(kwargs.get("function_name", "function_name")).strip()
+            class_name = str(kwargs.get("class_name", "class_name")).strip()
 
-            if not module_name or not function_name:
-                raise ValueError("module_name and function_name are required")
+            if not module_name:
+                raise ValueError("`module_name` is required")
 
             logger = kwargs.get("logger")
 
@@ -253,7 +256,7 @@ def object_cache(func: Callable) -> Callable:
             invoker = get_invoker(*args, **kwargs)
             parameters = kwargs.get("constructor_parameters")
 
-            if type(parameters) is dict:
+            if invoker and isinstance(parameters, dict) and len(parameters) > 0:
                 is_instance_method = not (
                     inspect.isfunction(invoker)
                     or (
@@ -264,8 +267,9 @@ def object_cache(func: Callable) -> Callable:
                 ) and inspect.ismethod(invoker)
 
                 if is_instance_method:
-                    invoker_object = invoker.__self__
-                    invoker_object.__init__(**parameters)
+                    invoker.__self__.__init__(**parameters)
+                elif hasattr(invoker, "__init__"):
+                    invoker.__init__(**parameters)
             return invoker
         except Exception as e:
             raise e
