@@ -275,8 +275,6 @@ class Graphql(object):
             )
 
             if schema_picker and callable(schema_picker):
-                logging.info(f">>> Fetch schema from database: {call_chain}")
-
                 query = schema_picker(
                     operation_type=operation_type,
                     operation_name=operation_name,
@@ -284,10 +282,8 @@ class Graphql(object):
                     enable_preferred_custom_schema=enable_preferred_custom_query,
                 )
 
-                Debugger.info(
-                    variable=query,
-                    stage="request_graqhql",
-                    delimiter="~",
+                logging.info(
+                    f">>> Fetch schema from database: {call_chain}, query: {query}"
                 )
 
         if not query:

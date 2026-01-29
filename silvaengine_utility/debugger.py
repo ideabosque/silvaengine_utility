@@ -28,7 +28,7 @@ class Debugger(object):
         if is_debug_mode:
             logger = (
                 logger
-                if logger and isinstance(logger, logging.Logger)
+                if isinstance(logger, logging.Logger)
                 else logging.getLogger("DEBUG")
             )
             logger.setLevel(level=logging.INFO)
