@@ -20,6 +20,9 @@ class BaseConnection(Connection):
     class Meta:
         abstract = True  # <-- Important, tells Graphene this class is abstract
 
+    def resolve_node_type(root, info):
+        return root._meta.node._meta.name
+    
     def resolve_total_count(root, info):
         return getattr(root, "total_count", None)
 

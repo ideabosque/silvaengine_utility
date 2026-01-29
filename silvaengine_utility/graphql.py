@@ -431,15 +431,33 @@ class Graphql(object):
         for type_def in schema["types"]:
             if type_def["name"] == type_name and type_def["kind"] == "OBJECT":
                 return [
-                    {
-                        "name": field["name"],
-                        "type": field["type"]["name"]
-                        or (field["type"].get("ofType") or {}).get("name"),
-                        "kind": field["type"]["kind"],
-                    }
+                    Graphql.get_real_field_data(field)
                     for field in type_def.get("fields", [])
                 ]
         raise Exception(f"Type '{type_name}' not found in schema.")
+
+    @staticmethod
+    def get_real_field_data(
+        field: dict[str, Any]
+    ) -> dict[str, Any]:
+        if field["name"] == "edges":
+            return {
+                "name": field["name"],
+                "type": (field["type"].get("ofType") or {}).get("ofType", {}).get("name"),
+                "kind": (field["type"].get("ofType") or {}).get("ofType", {}).get("kind"),
+            }
+        if field["name"] == "pageInfo":
+            return {
+                "name": field["name"],
+                "type": (field["type"].get("ofType") or {}).get("name"),
+                "kind": (field["type"].get("ofType") or {}).get("kind"),
+            }
+        return {
+            "name": field["name"],
+            "type": field["type"]["name"]
+            or (field["type"].get("ofType") or {}).get("name"),
+            "kind": field["type"]["kind"],
+        }
 
     @staticmethod
     def generate_field_subselection(schema: dict[str, Any], type_name: str) -> str:
