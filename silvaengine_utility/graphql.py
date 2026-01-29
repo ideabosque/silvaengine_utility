@@ -117,8 +117,6 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response(errors="Invalid operations")
 
-            Debugger.info(variable=context, stage=f"{__file__}.execute.context")
-
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
