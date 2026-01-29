@@ -268,10 +268,6 @@ class Graphql(object):
         if not query:
             schema_picker = execution_context.get("graphql_schema_picker")
 
-            logging.info(
-                f">>> schema_picker and callable(schema_picker): {bool(schema_picker and callable(schema_picker))}, Call chain: {call_chain}"
-            )
-
             if schema_picker and callable(schema_picker):
                 query = schema_picker(
                     operation_type=operation_type,
@@ -336,8 +332,6 @@ class Graphql(object):
                 f"`{module_name}.{class_name}.{proxied_function}` is not exists or uncallable"
             )
 
-        start_time = time.perf_counter()
-
         result = proxied_function(
             **{
                 "query": query,
@@ -345,20 +339,6 @@ class Graphql(object):
                 "context": execution_context,
             }
         )
-
-        duration = time.perf_counter() - start_time
-
-        if duration > 10:
-            Debugger.info(
-                variable={
-                    "query": query,
-                    "variables": variables,
-                    "context": execution_context,
-                },
-                stage=f"{__file__}.request_graphql",
-            )
-
-        print(f"{'>' * 30} Request `{call_chain}` spent {duration:.6f}s.")
 
         if (
             not isinstance(result, dict)
