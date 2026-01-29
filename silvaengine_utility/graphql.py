@@ -272,16 +272,13 @@ class Graphql(object):
         if not query:
             schema_picker = execution_context.get("graphql_schema_picker")
 
-            Debugger.info(
-                variable=f"schema_picker and callable(schema_picker): {bool(schema_picker and callable(schema_picker))}",
-                stage=f"{__file__}.request_graphql.schema_picker",
+            logging.info(
+                f"schema_picker and callable(schema_picker): {bool(schema_picker and callable(schema_picker))}, Call chain: {call_chain}"
             )
 
             if schema_picker and callable(schema_picker):
-                Debugger.info(
-                    variable=f"Fetch schema from database: {call_chain}",
-                    stage=f"{__file__}.request_graphql.get_schema",
-                )
+                logging.info(f"Fetch schema from database: {call_chain}")
+
                 query = schema_picker(
                     operation_type=operation_type,
                     operation_name=operation_name,
