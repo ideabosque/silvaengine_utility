@@ -16,7 +16,7 @@ class Debugger(object):
         delimiter_repetitions: int = 20,
         setting: Optional[Dict[str, Any]] = None,
         logger: Optional[logging.Logger] = None,
-        enabled_trace: bool = True,
+        enabled_trace: bool = False,
     ):
         debug_mode_key = "debug_mode"
         is_debug_mode = (
