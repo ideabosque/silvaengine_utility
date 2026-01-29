@@ -236,8 +236,6 @@ class Graphql(object):
         variables: Optional[dict[str, Any]] = None,
         enable_preferred_custom_query: bool = True,
     ) -> dict[str, Any]:
-        start_time = time.perf_counter()
-
         if not all(
             [
                 module_name,
@@ -338,12 +336,30 @@ class Graphql(object):
                 f"`{module_name}.{class_name}.{proxied_function}` is not exists or uncallable"
             )
 
+        start_time = time.perf_counter()
+
         result = proxied_function(
             **{
                 "query": query,
                 "variables": variables,
                 "context": execution_context,
             }
+        )
+
+        duration = time.perf_counter() - start_time
+
+        if duration>10:
+            Debugger.info(
+                variable={
+                    "query": query,
+                    "variables": variables,
+                    "context": execution_context,
+                },
+                stage=f"{__file__}.request_graphql"，
+            )
+
+        print(
+            f"{'>' * 30} Request `{call_chain}` spent {duration:.6f}s."
         )
 
         if (
@@ -361,10 +377,6 @@ class Graphql(object):
 
         if isinstance(result_body, (str, bytes)):
             result_body = Serializer.json_loads(result_body)
-
-        print(
-            f"{'=>' * 10} Execute `{call_chain}` spent {(time.perf_counter() - start_time):.6f}s."
-        )
 
         if status_code.startswith("20"):
             return result_body.get("data", {}).get(operation_name, {})
