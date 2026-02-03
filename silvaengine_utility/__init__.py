@@ -49,6 +49,7 @@ __all__ = [
     "SQLAlchemyRelayConnectionField",
     "BaseConnection",
     "SortInput",
+    "GraphQLTypeGenerator",
 ]
 
 from .authorizer import Authorizer
@@ -80,6 +81,7 @@ from .graphql import (
     JSONSnakeCase,
     SafeFloat,
 )
+from .graphql_type_generator import GraphQLTypeGenerator
 from .http import HttpResponse
 from .invoker import Invoker
 from .json_handler import HighPerformanceJSONHandler, JSONHandler

@@ -276,12 +276,19 @@ class Graphql(object):
                     enable_preferred_custom_schema=enable_preferred_custom_query,
                 )
 
-                logging.info(
-                    f">>> Fetch schema from database: {call_chain}, query: {query}"
+                Debugger.info(
+                    variable=f"Fetch schema from database: {call_chain}, query: {query}",
+                    stage=f"{__file__}.request_graphql.schema_picker",
+                    setting=settings,
                 )
 
         if not query:
-            logging.warning(f"Introspection query `{call_chain}`")
+            Debugger.info(
+                variable=f"Introspection query `{call_chain}`",
+                stage=f"{__file__}.request_graphql.introspection",
+                setting=settings,
+                delimiter="#",
+            )
 
             schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
             schema = Graphql._graphql_schema_cache.get(schema_cache_index)
