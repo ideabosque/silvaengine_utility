@@ -10,6 +10,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import get_type_hints
 
+from .graphql import JSONCamelCase, JSONSnakeCase
+
 try:
     from graphene import (
         Boolean,
@@ -41,6 +43,7 @@ class DataTypeMapper:
         datetime: DateTime,
         date: Date,
         Decimal: GraphQLDecimal,
+        dict: JSONCamelCase,
     }
 
     @classmethod
