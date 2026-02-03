@@ -276,12 +276,6 @@ class Graphql(object):
                     enable_preferred_custom_schema=enable_preferred_custom_query,
                 )
 
-                Debugger.info(
-                    variable=f"Fetch schema from database: {call_chain}, query: {query}",
-                    stage=f"{__file__}.request_graphql.schema_picker",
-                    setting=settings,
-                )
-
         if not query:
             Debugger.info(
                 variable=f"Introspection query `{call_chain}`",
