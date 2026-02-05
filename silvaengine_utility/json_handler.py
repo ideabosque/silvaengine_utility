@@ -386,6 +386,8 @@ class HighPerformanceJSONHandler:
             if obj.as_integer_ratio()[1] == 1:
                 return int(obj)
             return float(obj)
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
         else:
             return obj
 
