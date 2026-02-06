@@ -13,6 +13,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Union
 
+import pendulum
+
 # Try to import orjson for high performance, fallback to standard json
 try:
     import orjson
@@ -387,7 +389,7 @@ class HighPerformanceJSONHandler:
                 return int(obj)
             return float(obj)
         elif isinstance(obj, datetime):
-            return obj.replace(tzinfo=timezone.utc).isoformat(timespec="seconds")
+            return pendulum.instance(obj.replace(tzinfo=timezone.utc).isoformat())
         else:
             return obj
 
