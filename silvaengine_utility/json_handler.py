@@ -397,13 +397,12 @@ class HighPerformanceJSONHandler:
     def convert_data_types(obj: Any, parse_datetime_to_string=True) -> Any:
         if isinstance(obj, dict):
             return {
-                key: HighPerformanceJSONHandler.convert_decimal_to_number(value)
+                key: HighPerformanceJSONHandler.convert_data_types(value)
                 for key, value in obj.items()
             }
         elif isinstance(obj, (list, tuple)):
             converted = [
-                HighPerformanceJSONHandler.convert_decimal_to_number(item)
-                for item in obj
+                HighPerformanceJSONHandler.convert_data_types(item) for item in obj
             ]
             return type(obj)(converted)
         elif isinstance(obj, Decimal):
