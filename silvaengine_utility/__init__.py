@@ -25,6 +25,7 @@ __all__ = [
     "ensure_datetime",
     "json_normalize",
     "convert_decimal_to_number",
+    "convert_data_types",
     "Context",
     "Graphql",
     "Invoker",
@@ -96,3 +97,4 @@ from .utility import Struct, Utility
 # Convenience exports for common functions
 json_normalize = Serializer.json_normalize
 convert_decimal_to_number = HighPerformanceJSONHandler.convert_decimal_to_number
+convert_data_types = HighPerformanceJSONHandler.convert_data_types

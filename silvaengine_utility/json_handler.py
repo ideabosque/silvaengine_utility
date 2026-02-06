@@ -389,7 +389,32 @@ class HighPerformanceJSONHandler:
                 return int(obj)
             return float(obj)
         elif isinstance(obj, datetime):
-            return pendulum.instance(obj.replace(tzinfo=timezone.utc).isoformat())
+            return pendulum.instance(obj.replace(tzinfo=timezone.utc))
+        else:
+            return obj
+
+    @staticmethod
+    def convert_data_types(obj: Any, parse_datetime_to_string=True) -> Any:
+        if isinstance(obj, dict):
+            return {
+                key: HighPerformanceJSONHandler.convert_decimal_to_number(value)
+                for key, value in obj.items()
+            }
+        elif isinstance(obj, (list, tuple)):
+            converted = [
+                HighPerformanceJSONHandler.convert_decimal_to_number(item)
+                for item in obj
+            ]
+            return type(obj)(converted)
+        elif isinstance(obj, Decimal):
+            if obj.as_integer_ratio()[1] == 1:
+                return int(obj)
+            return float(obj)
+        elif isinstance(obj, datetime):
+            if parse_datetime_to_string:
+                return obj.replace(tzinfo=timezone.utc).isoformat()
+
+            return pendulum.instance(obj.replace(tzinfo=timezone.utc))
         else:
             return obj
 
