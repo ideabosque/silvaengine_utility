@@ -9,7 +9,7 @@ with built-in performance tracking and fallback to standard json library.
 
 __author__ = "bibow"
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Union
 
@@ -387,7 +387,7 @@ class HighPerformanceJSONHandler:
                 return int(obj)
             return float(obj)
         elif isinstance(obj, datetime):
-            return obj.isoformat()
+            return obj.replace(tzinfo=timezone.utc).isoformat(timespec="seconds")
         else:
             return obj
 
