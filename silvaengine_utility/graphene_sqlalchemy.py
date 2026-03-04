@@ -5,7 +5,7 @@ from sqlalchemy.sql.sqltypes import DateTime
 from datetime import datetime
 import base64, json
 
-from .graphql import JSON
+from .graphql import JSONCamelCase
 
 class SortInput(InputObjectType):
     field = String()
@@ -46,7 +46,7 @@ class SQLAlchemyRelayConnectionField(ConnectionField):
     def __init__(self, type_, *args, **kwargs):
         # Add default arguments if not already passed
         if "filters" not in kwargs:
-            kwargs["filters"] = Argument(JSON)
+            kwargs["filters"] = Argument(JSONCamelCase)
         if "sort" not in kwargs:
             kwargs["sort"] = Argument(List(SortInput))
         if "limit" not in kwargs:
