@@ -168,3 +168,14 @@ class Utility(object):
                 attributes[attribute] = value
 
         return attributes
+
+    @staticmethod
+    def parse_bool(value: Any, default: bool) -> bool:
+        """Parse a value as boolean."""
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+
+        return default
