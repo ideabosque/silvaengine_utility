@@ -565,7 +565,6 @@ class Graphql(object):
         operation_type = operation_type.strip()
         cache_index = f"{operation_type.lower()}_{operation_name.lower()}"
         query = Graphql._graphql_query_cache.get(cache_index)
-
         if query:
             return query
 
@@ -602,7 +601,7 @@ class Graphql(object):
         argument_usage = ", ".join(f"{arg['name']}: ${arg['name']}" for arg in args)
         return_type = operation_details["type"]
 
-        if return_type["kind"] == "NON_NULL":
+        if return_type["kind"] == "NON_NULL" or return_type["kind"] == "LIST":
             return_type = return_type["ofType"]
 
         field_string = (
