@@ -127,20 +127,26 @@ class Graphql(object):
             )
 
             if execution_result:
-                # Check for errors first - GraphQL can have both data and errors
+                # GraphQL spec: a response can contain both `data` (partial)
+                # and `errors` simultaneously.  Return 200 with both keys so
+                # clients don't lose successfully-resolved fields.
                 if execution_result.errors:
                     Debugger.info(
                         variable=f"Query: {query}, Variables: {params.get('variables', {})}, Errors: {execution_result.errors}",
                         stage="Graphql Debug(execute result)",
                         setting=self.setting,
                     )
-                    return Graphql.error_response(
-                        errors=[
-                            Utility.format_error(e) for e in execution_result.errors
-                        ],
-                        status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
-                    )
-                elif execution_result.data:
+                    formatted_errors = [
+                        Utility.format_error(e) for e in execution_result.errors
+                    ]
+                    # HTTP 200 for application-level GraphQL errors (resolver
+                    # errors, validation errors).  HTTP 500 is reserved for
+                    # transport/infrastructure failures.
+                    body: Dict[str, Any] = {"errors": formatted_errors}
+                    if execution_result.data is not None:
+                        body["data"] = execution_result.data
+                    return HttpResponse.format_response(body, HttpStatus.OK.value)
+                elif execution_result.data is not None:
                     return Graphql.success_response(data=execution_result.data)
 
             return Graphql.error_response(
@@ -153,8 +159,10 @@ class Graphql(object):
                 stage="Graphql Debug(execute)",
                 setting=self.setting,
             )
+            # Log the full exception internally; return a generic message to
+            # the client to avoid leaking internal implementation details.
             return Graphql.error_response(
-                errors=str(e),
+                errors="Internal server error",
                 status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
 
