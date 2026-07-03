@@ -76,6 +76,27 @@ def graphql_service_initialization(func: Callable) -> Callable:
     return wrapper_function
 
 
+def _coerce_variable_values(value: Any) -> Any:
+    """Recursively convert Decimal values to float in GraphQL variables.
+
+    ``Serializer.json_loads`` parses JSON floats as ``Decimal`` by default
+    (``parse_float=Decimal``).  However, ``graphql-core``'s ``GraphQLFloat``
+    scalar only accepts native ``int``/``float`` — ``Decimal`` values cause
+    ``"Float cannot represent non numeric value"`` validation errors.
+
+    This helper walks the variable tree and converts ``Decimal`` to
+    ``float`` so that graphene can validate and coerce them correctly.
+    Integers (parsed as ``int`` by ``json_loads``) are left untouched.
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {k: _coerce_variable_values(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_coerce_variable_values(v) for v in value]
+    return value
+
+
 class Graphql(object):
     _graphql_schema_cache: Dict[str, Any] = {}
     _graphql_query_cache: Dict[str, str] = {}
@@ -117,11 +138,18 @@ class Graphql(object):
             if not query:
                 return Graphql.error_response(errors="Invalid operations")
 
+            # Serializer.json_loads converts JSON floats to Decimal by
+            # default (parse_float=Decimal).  graphql-core's GraphQLFloat
+            # and GraphQLInt scalars only accept native int/float, so
+            # Decimal values in variables cause validation errors.
+            # Convert Decimal back to float before passing to graphene.
+            variable_values = _coerce_variable_values(params.get("variables", {}))
+
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
                     context_value=context,
-                    variable_values=params.get("variables", {}),
+                    variable_values=variable_values,
                     operation_name=params.get("operation_name"),
                 )
             )
