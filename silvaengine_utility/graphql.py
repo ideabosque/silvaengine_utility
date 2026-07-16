@@ -97,6 +97,29 @@ def _coerce_variable_values(value: Any) -> Any:
     return value
 
 
+def _is_subscription_operation(query: str) -> bool:
+    """Detect whether a GraphQL operation is a subscription type.
+
+    Uses graphql-core's ``parse()`` to inspect the AST and check
+    for ``OperationType.SUBSCRIPTION`` definitions.
+
+    Returns ``False`` on parse errors so that non-subscription
+    queries fall through to the normal execution path.
+    """
+    from graphql import parse
+    from graphql.language.ast import OperationDefinitionNode
+
+    try:
+        document = parse(query)
+        for definition in document.definitions:
+            if isinstance(definition, OperationDefinitionNode):
+                if definition.operation.value == "subscription":
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 class Graphql(object):
     _graphql_schema_cache: Dict[str, Any] = {}
     _graphql_query_cache: Dict[str, str] = {}
@@ -145,6 +168,21 @@ class Graphql(object):
             # Convert Decimal back to float before passing to graphene.
             variable_values = _coerce_variable_values(params.get("variables", {}))
 
+            # Subscription operations require a different execution path
+            # (schema.subscribe instead of schema.execute_async) and push
+            # events to the WebSocket client via post_to_connection.
+            if _is_subscription_operation(query):
+                return self._execute_subscription(
+                    schema=schema,
+                    query=query,
+                    context=context,
+                    variable_values=variable_values,
+                    operation_name=params.get("operation_name"),
+                    connection_id=params.get("connection_id"),
+                    aws_api_stage=params.get("stage"),
+                    aws_api_area=params.get("area"),
+                )
+
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
@@ -191,6 +229,95 @@ class Graphql(object):
             # the client to avoid leaking internal implementation details.
             return Graphql.error_response(
                 errors="Internal server error",
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+
+    def _execute_subscription(
+        self,
+        schema: Schema,
+        query: str,
+        context: Dict[str, Any],
+        variable_values: Dict[str, Any],
+        operation_name: Optional[str],
+        connection_id: Optional[str],
+        aws_api_stage: Optional[str],
+        aws_api_area: Optional[str],
+    ) -> Any:
+        """Execute a GraphQL subscription operation.
+
+        Calls ``schema.subscribe()`` to obtain an async iterator of
+        ``ExecutionResult`` events, then pushes each event to the
+        WebSocket client via ``ApiGatewayManagementApi.post_to_connection``.
+
+        Requires ``connection_id`` (WebSocket connection ID). The
+        endpoint URL is resolved from ``self.setting`` or environment
+        variables by :class:`WebSocketStreamer`.
+
+        Returns an HTTP response indicating completion or error.
+        """
+        import asyncio
+
+        from .streaming import WebSocketStreamer
+
+        if not connection_id:
+            return Graphql.error_response(
+                errors="Subscription requires connection_id (WebSocket connection).",
+                status_code=HttpStatus.BAD_REQUEST.value,
+            )
+
+        streamer = WebSocketStreamer(
+            connection_id=connection_id,
+            aws_api_stage=aws_api_stage,
+            aws_api_area=aws_api_area,
+            setting=self.setting,
+            logger=self.logger,
+        )
+
+        async def _consume_subscription():
+            # schema.subscribe() returns an AsyncIterator[ExecutionResult]
+            # when successful, or an ExecutionResult with errors on failure.
+            subscribe_result = await schema.subscribe(
+                query,
+                context_value=context,
+                variable_values=variable_values,
+                operation_name=operation_name,
+            )
+
+            # If subscribe returned an ExecutionResult with errors
+            if hasattr(subscribe_result, "errors") and subscribe_result.errors:
+                return subscribe_result.errors
+
+            # Iterate over events and push each to the WebSocket client
+            async for execution_result in subscribe_result:
+                payload: Dict[str, Any] = {}
+                if execution_result.data is not None:
+                    payload["data"] = execution_result.data
+                if execution_result.errors:
+                    payload["errors"] = [
+                        Utility.format_error(e) for e in execution_result.errors
+                    ]
+                if payload:
+                    await streamer.send(payload)
+
+            return None
+
+        try:
+            errors = asyncio.run(_consume_subscription())
+            if errors:
+                formatted = [Utility.format_error(e) for e in errors]
+                return Graphql.error_response(errors=formatted)
+            # Subscription completed successfully
+            return Graphql.success_response(
+                data={"subscription": "completed"}
+            )
+        except Exception as e:
+            Debugger.info(
+                variable=e,
+                stage="Graphql Debug(subscription)",
+                setting=self.setting,
+            )
+            return Graphql.error_response(
+                errors="Subscription execution error",
                 status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
 
