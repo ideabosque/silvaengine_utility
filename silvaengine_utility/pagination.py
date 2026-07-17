@@ -147,3 +147,63 @@ def build_connection(
         "page_info": page_info,
         "total_count": total_count,
     }
+
+
+# ---------------------------------------------------------------------------
+# Keyset Connection 构造 + PaginationMode enum
+# ---------------------------------------------------------------------------
+
+class PaginationMode:
+    """分页模式常量（字符串值，用于 GraphQL enum 或 resolver 比较）。
+
+    刻意不使用 graphene.Enum，以保持本模块对 graphene 的依赖最小化。
+    各模块在 schema 中定义自己的 graphene.Enum(PaginationMode) 并使用
+    本常量作为值比较即可。
+    """
+
+    OFFSET = "OFFSET"
+    KEYSET = "KEYSET"
+
+
+def build_keyset_connection(
+    items: List[Dict[str, Any]],
+    total_count: int,
+    first: Optional[int],
+    after: Optional[str],
+    sort_field: str = "updated_at",
+    id_field: str = "id",
+) -> Dict[str, Any]:
+    """构造 keyset 模式的 Relay Connection 响应。
+
+    与 build_connection 输出结构一致（edges/page_info/total_count），
+    但 cursor 使用 keyset 格式 base64(json({v, id}))，用于稳定深翻页。
+
+    要求 items 中每条记录都包含 sort_field 与 id_field 两个键。
+    """
+    page_size = first if first and first > 0 else DEFAULT_PAGE_SIZE
+
+    edges: List[Dict[str, Any]] = []
+    for item in items:
+        cursor_payload = {
+            "v": item.get(sort_field),
+            "id": item.get(id_field),
+        }
+        edges.append(
+            {
+                "node": item,
+                "cursor": encode_keyset_cursor(cursor_payload),
+            }
+        )
+
+    has_next_page = len(items) >= page_size and total_count > len(items)
+    page_info = {
+        "has_next_page": has_next_page,
+        "has_previous_page": bool(after),
+        "start_cursor": edges[0]["cursor"] if edges else None,
+        "end_cursor": edges[-1]["cursor"] if edges else None,
+    }
+    return {
+        "edges": edges,
+        "page_info": page_info,
+        "total_count": total_count,
+    }

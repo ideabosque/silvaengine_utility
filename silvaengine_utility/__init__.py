@@ -61,6 +61,8 @@ __all__ = [
     "decode_keyset_cursor",
     "decode_cursor",
     "build_connection",
+    "PaginationMode",
+    "build_keyset_connection",
 ]
 
 from .authorizer import Authorizer
@@ -113,6 +115,8 @@ from .pagination import (
     decode_offset_cursor,
     encode_keyset_cursor,
     encode_offset_cursor,
+    build_keyset_connection,
+    PaginationMode,
 )
 from .utility import Struct, Utility
 
