@@ -51,6 +51,16 @@ __all__ = [
     "BaseConnection",
     "SortInput",
     "GraphQLTypeGenerator",
+    "pagination",
+    "PageInfoType",
+    "MAX_PAGE_LIMIT",
+    "DEFAULT_PAGE_SIZE",
+    "encode_offset_cursor",
+    "decode_offset_cursor",
+    "encode_keyset_cursor",
+    "decode_keyset_cursor",
+    "decode_cursor",
+    "build_connection",
 ]
 
 from .authorizer import Authorizer
@@ -92,6 +102,18 @@ from .performance_monitor import (
     set_performance_log_threshold,
 )
 from .serializer import Serializer
+
+from .pagination import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_LIMIT,
+    PageInfoType,
+    build_connection,
+    decode_cursor,
+    decode_keyset_cursor,
+    decode_offset_cursor,
+    encode_keyset_cursor,
+    encode_offset_cursor,
+)
 from .utility import Struct, Utility
 
 # Convenience exports for common functions
