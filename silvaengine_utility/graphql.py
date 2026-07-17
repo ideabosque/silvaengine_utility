@@ -301,6 +301,23 @@ class Graphql(object):
 
             return None
 
+        # ``asyncio.run`` 要求当前线程无运行中的 event loop。
+        # 本方法假定由同步 Lambda handler 调用；若被 async 上下文复用，
+        # 显式返回错误而非抛 RuntimeError，便于上层诊断。
+        try:
+            asyncio.get_running_loop()
+            return Graphql.error_response(
+                errors=(
+                    "Subscription cannot be executed within a running event "
+                    "loop; Graphql.execute() must be called from a sync "
+                    "context."
+                ),
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+        except RuntimeError:
+            # 无运行中的 loop —— 正常路径，继续 asyncio.run
+            pass
+
         try:
             errors = asyncio.run(_consume_subscription())
             if errors:

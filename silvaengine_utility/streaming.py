@@ -85,10 +85,17 @@ class WebSocketStreamer:
 
         Args:
             payload: 事件数据字典，将 JSON 序列化后发送。
+
+        实现说明：``post_to_connection`` 是同步 boto3 调用，
+        用 ``asyncio.to_thread`` 包装避免阻塞 event loop。
+        为后续 ReAct 步骤级流式（高频推送）预留非阻塞语义。
         """
+        import asyncio
+
         data = Serializer.json_dumps(payload).encode("utf-8")
         try:
-            self.client.post_to_connection(
+            await asyncio.to_thread(
+                self.client.post_to_connection,
                 ConnectionId=self.connection_id,
                 Data=data,
             )
