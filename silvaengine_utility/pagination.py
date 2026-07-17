@@ -36,6 +36,9 @@ __all__ = [
     "decode_keyset_cursor",
     "decode_cursor",
     "build_connection",
+    "restore_keyset_value",
+    "build_keyset_where_clause",
+    "build_keyset_connection_no_count",
 ]
 
 #: 全局分页上限，各模块应通过 min(first, MAX_PAGE_LIMIT) 强制约束。
@@ -198,6 +201,133 @@ def build_keyset_connection(
     has_next_page = len(items) >= page_size and total_count > len(items)
     page_info = {
         "has_next_page": has_next_page,
+        "has_previous_page": bool(after),
+        "start_cursor": edges[0]["cursor"] if edges else None,
+        "end_cursor": edges[-1]["cursor"] if edges else None,
+    }
+    return {
+        "edges": edges,
+        "page_info": page_info,
+        "total_count": total_count,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Keyset 谓词构造 + 类型还原 + LIMIT N+1 连接（v2 扩展，向后兼容）
+# ---------------------------------------------------------------------------
+# 以下为审查阶段发现的系统性缺陷的统一修复入口：
+# - C5: cursor round-trip 类型丢失（DateTime -> str 隐式转换脆弱）
+# - G14: keyset 谓词在多个 repository 重复手写
+# - G2: keyset 模式仍跑 COUNT(*)，深翻页未真正优化
+# 这些函数为 additive，既有 build_keyset_connection 保持不变。
+
+import pendulum  # noqa: E402  (局部导入，避免未使用本特性的模块强依赖)
+
+
+def restore_keyset_value(raw: Any, sort_type: Optional[str]) -> Any:
+    """将 cursor 解码后的 ``v`` 还原为 SQL 可比较的强类型。
+
+    Args:
+        raw: ``decode_keyset_cursor`` 返回的 ``v``（json 反序列化后通常为
+            str/number/None）。
+        sort_type: 排序字段的类型标记，约定值：
+            ``"datetime"`` -> pendulum.DateTime
+            ``None`` / ``"str"`` / ``"int"`` -> 原样返回
+
+    Returns:
+        还原后的值。``raw`` 为 None 时直接返回 None（NULL 谓词由调用方处理）。
+    """
+    if raw is None or sort_type in (None, "str"):
+        return raw
+    if sort_type == "datetime":
+        if isinstance(raw, str):
+            try:
+                return pendulum.parse(raw)
+            except Exception:
+                # 解析失败回退为原值，交由 driver 处理（保持旧行为，不引入新错误）
+                return raw
+        return raw
+    if sort_type == "int":
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return raw
+    return raw
+
+
+def build_keyset_where_clause(
+    sort_field: str,
+    id_field: str,
+    sort_dir: str,
+    cursor_data: Optional[Dict[str, Any]],
+    sort_type: Optional[str] = None,
+    params: Optional[Dict[str, Any]] = None,
+) -> str:
+    """构造 keyset 分页的 WHERE 谓词片段（不含前导 ``AND``，便于拼接到既有 where）。
+
+    约定 ORDER BY 方向：DESC 取「小于游标」即新页，ASC 取「大于游标」。
+    本函数仅返回谓词 SQL 片段（如 ``(created_at < :cv OR (created_at = :cv AND id < :cid))``），
+    绑定参数写入 ``params``（若提供）。
+
+    Args:
+        sort_field: 排序列名（调用方须做白名单校验）。
+        id_field: 唯一标识列名（组合键稳定排序用）。
+        sort_dir: ``"DESC"`` 或 ``"ASC"``。
+        cursor_data: ``decode_keyset_cursor`` 的返回值；None 或缺 ``v`` 时返回空串
+            （即无 cursor，取首页），同时不写入 params。
+        sort_type: 排序列类型标记，见 ``restore_keyset_value``。
+        params: 若提供，则将 ``:cv`` / ``:cid`` 写入此 dict（原地修改并复用）；
+            若为 None 则仅返回片段，调用方自行绑定。
+
+    Returns:
+        SQL 片段字符串。无 cursor 时返回 ``""``。
+    """
+    if not cursor_data or cursor_data.get("v") is None and cursor_data.get("id") is None:
+        return ""
+    cv = restore_keyset_value(cursor_data.get("v"), sort_type)
+    cid = cursor_data.get("id")
+    op = "<" if str(sort_dir).upper() == "DESC" else ">"
+    clause = f"({sort_field} {op} :cv OR ({sort_field} = :cv AND {id_field} {op} :cid))"
+    if params is not None:
+        params["cv"] = cv
+        params["cid"] = cid
+    return clause
+
+
+def build_keyset_connection_no_count(
+    items: List[Dict[str, Any]],
+    first: Optional[int],
+    after: Optional[str],
+    sort_field: str = "updated_at",
+    id_field: str = "id",
+    total_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    """构造 keyset Connection，使用 LIMIT N+1 策略判定 ``has_next_page``。
+
+    与 ``build_keyset_connection`` 的差异（G2 修复）：
+    - 调用方应查询 ``LIMIT :page_size+1``，传入 ``items``（含多取的 1 条）；
+    - ``has_next_page = len(items) > page_size``，若为 True 则截断末尾多取行；
+    - ``total_count`` 可选：传入则填入响应（仍触发 COUNT，仅当客户端需要
+      ``totalCount`` 时调用方才计算）；为 None 时响应 ``total_count`` 置 None。
+
+    输出结构与 ``build_keyset_connection`` 一致。
+    """
+    page_size = first if first and first > 0 else DEFAULT_PAGE_SIZE
+    has_next = len(items) > page_size
+    page_items = items[:page_size] if has_next else items
+
+    edges: List[Dict[str, Any]] = []
+    for item in page_items:
+        edges.append(
+            {
+                "node": item,
+                "cursor": encode_keyset_cursor(
+                    {"v": item.get(sort_field), "id": item.get(id_field)}
+                ),
+            }
+        )
+    page_info = {
+        "has_next_page": has_next,
         "has_previous_page": bool(after),
         "start_cursor": edges[0]["cursor"] if edges else None,
         "end_cursor": edges[-1]["cursor"] if edges else None,
