@@ -11,6 +11,9 @@ A high-performance utility library providing JSON serialization, AWS integration
 - **Performance Monitoring**: Built-in performance tracking for JSON operations with detailed metrics
 - **Datetime Handling**: Advanced datetime parsing with Pendulum integration and caching
 - **Type Safety**: Comprehensive type handling for Decimal, datetime, bytes, and custom objects
+- **Pagination**: Shared offset/limit pagination utilities (cursor encoding/decoding, Relay Connection builder) for banyan business modules
+- **Idempotency**: Shared `IdempotencyRepository` / `check_and_store` / `store_result` / `purge_expired` plus `idempotent_mutation` decorator for banyan Mutation deduplication
+- **Auth Helpers**: Shared `get_operator_id` / `require_operator_id` / `OperatorIdRequiredError` for banyan Mutation operator-id guards
 
 ## Installation
 
@@ -193,6 +196,83 @@ info = Utility.get_library_info()
 #   "datetime": {"library": "pendulum", "version": "2.1.0"}
 # }
 ```
+
+### Pagination
+
+Shared offset/limit pagination utilities for banyan business modules:
+
+```python
+from silvaengine_utility.pagination import (
+    encode_offset_cursor,
+    decode_cursor,
+    build_connection,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_LIMIT,
+)
+
+# Encode offset as base64 cursor
+cursor = encode_offset_cursor(20)  # "MjA="
+
+# Decode cursor back to offset
+offset = decode_cursor(cursor)  # 20
+
+# Build a Relay Connection payload from rows + total
+connection = build_connection(rows, total, first=10, after=cursor)
+# { "edges": [...], "pageInfo": { "hasNextPage": True, "endCursor": ... }, "totalCount": 100 }
+```
+
+### Idempotency
+
+Shared Mutation deduplication for banyan business modules. Uses `tenant_idempotency_record` (composite key `partition_key` + `idempotency_key`) with `INSERT ... ON CONFLICT DO NOTHING` for concurrent-safe deduplication:
+
+```python
+from silvaengine_utility.idempotency import (
+    IdempotencyRepository,
+    check_and_store,
+    store_result,
+    purge_expired,
+    idempotent_mutation,
+)
+
+# Low-level repository (for custom flows)
+existing = check_and_store(partition_key, idempotency_key, mutation_name)
+if existing is not None:
+    return existing
+result = mutate(...)
+store_result(partition_key, idempotency_key, mutation_name, result)
+
+# Decorator (recommended for graphene Mutations)
+@idempotent_mutation("CreateAgent")
+def mutate(root, info, **kwargs):
+    ...
+    return {"node": agent}
+```
+
+The `idempotent_mutation` decorator:
+- Retrieves `idempotency_key` **from kwargs only** (no positional-arg fallback, which previously mis-bound `id`/`session_id` as the key)
+- On `check_and_store` exception: logs ERROR and proceeds (degrades to non-idempotent for this request, does not block business)
+- On `store_result` exception: logs ERROR and returns the computed result (business succeeded; idempotency not persisted, client retry will re-execute)
+- Preserves the wrapped function's return structure exactly
+
+### Auth Helpers
+
+Shared operator-id retrieval and guard for banyan business module Mutations:
+
+```python
+from silvaengine_utility.auth import (
+    get_operator_id,
+    require_operator_id,
+    OperatorIdRequiredError,
+)
+
+# Read-only (returns None when missing, no fallback)
+operator_id = get_operator_id(info)
+
+# Guard (raises when missing) — use at the entry of write Mutations
+operator_id = require_operator_id(info, "DeleteAgent")
+```
+
+`get_operator_id` reads `info.context["user_id"]` then `info.context["operator_id"]`, returns `Optional[str]` (no fallback — historical `or "system"` fallbacks are preserved at call sites, semantics unchanged). `require_operator_id` raises `OperatorIdRequiredError(mutation_name)` when both are missing. Guards are not enforced by the shared helper — adding them at each Mutation remains the business module's responsibility.`
 
 ## Configuration
 

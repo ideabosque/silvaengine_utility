@@ -24,9 +24,10 @@ prompt / setting 三模块近乎完全重复的 ``models/idempotency.py`` 实现
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import pendulum
 from silvaengine_connections import ConnectionPoolManager
@@ -220,3 +221,87 @@ def purge_expired(partition_key: str, retention_seconds: int = 604800) -> int:
     ``created_at`` 上建议建索引以加速清理。
     """
     return IdempotencyRepository.purge_expired(partition_key, retention_seconds)
+
+
+
+def idempotent_mutation(mutation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Mutation 幂等装饰器（统一各业务模块的本地 ``_idempotent`` 副本）。
+
+    设计目标：收敛 banyan 12 模块 20 份几乎完全相同但行为漂移的本地装饰器，
+    修复审查阶段发现的两个系统性缺陷：
+
+    1. **位置参数回退 bug**：本地副本统一含 ``for a in args[2:]: if
+       isinstance(a, str): idempotency_key = a``，当 caller 以位置参数传
+       ``id`` / ``session_id`` / ``agent_id`` 等时，首个字符串位置参数被
+       误当幂等键，导致 A 请求的 ``id`` 撞上 B 请求的真幂等键。
+       本装饰器**仅从 kwargs 显式取 idempotency_key**，删除位置回退分支
+       （调查显示所有 mutation 在 resolver 层都从 kwargs 传 idempotency_key，
+       回退分支为带 bug 的死代码）。
+
+    2. **静默吞错**：4 模块（capability/knowledge/perm/user）
+       ``except Exception: pass`` 完全吞掉 check/store 异常，2 模块
+       （merchant/orchestration）仅吞 check 不吞 store，行为分裂且抵消
+       共享层 ``store_result`` 不吞错的收益。本装饰器统一为
+       ``logger.error`` 记录后继续，保留可观测性但不阻塞业务。
+
+    异常处理策略（与各模块不吞错变体一致，统一形态）：
+    - ``check_and_store`` 异常：``logger.error`` 后继续执行 mutation
+      （降级为非幂等本次，不阻塞业务；DB 抖动恢复后后续请求恢复幂等）。
+    - ``store_result`` 异常：``logger.error`` 后返回已计算 result（业务已
+      成功，幂等未持久化由客户端重试处理，不阻塞返回）。
+
+    与各模块现有 ``_idempotent`` 的行为兼容性：
+    - 返回值结构完全保持（直接 ``return func(...)`` / ``return existing``）。
+    - 无 ``info`` 或无 ``idempotency_key`` 时直接执行 mutation（与现有完全一致）。
+    - ``info`` 取 ``args[1]`` 或 ``kwargs.get("info")``（与现有一致）。
+
+    Args:
+        mutation_name: Mutation 名称，用于幂等记录的 ``mutation_name`` 字段
+            与日志标识，便于跨模块统一观测。
+
+    Returns:
+        装饰器工厂，应用于 ``@idempotent_mutation("CreateXxx")`` 形态。
+    """
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            info = args[1] if len(args) > 1 else kwargs.get("info")
+            idempotency_key = kwargs.get("idempotency_key")
+            if info is None or not idempotency_key:
+                return func(*args, **kwargs)
+
+            partition_key = info.context.get("partition_key", "")
+            try:
+                existing = check_and_store(
+                    partition_key, idempotency_key, mutation_name
+                )
+                if existing is not None:
+                    return existing
+            except Exception as exc:
+                logger.error(
+                    "[idempotency] 幂等检查失败（降级为非幂等本次，继续执行）: "
+                    "mutation=%s key=%s err=%s",
+                    mutation_name,
+                    idempotency_key,
+                    exc,
+                )
+
+            result = func(*args, **kwargs)
+            try:
+                store_result(
+                    partition_key, idempotency_key, mutation_name, result
+                )
+            except Exception as exc:
+                logger.error(
+                    "[idempotency] 幂等存储失败（业务已成功，幂等未持久化，客户端重试将重复执行）: "
+                    "mutation=%s key=%s err=%s",
+                    mutation_name,
+                    idempotency_key,
+                    exc,
+                )
+            return result
+
+        return wrapper
+
+    return decorator
