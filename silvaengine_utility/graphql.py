@@ -907,8 +907,21 @@ class JSON(graphene.Scalar):
             return NamingConvention.SNAKE
         return NamingConvention.CAMEL
 
-    def serialize(self, value: Any) -> Any:
+    @staticmethod
+    def serialize(value: Any) -> Any:
         """Serialize value to JSON with key style conversion.
+
+        graphene's Scalar coercion contract calls ``serialize`` /
+        ``parse_value`` as static methods (without an instance), so these
+        MUST be ``@staticmethod`` — defining them as instance methods makes
+        ``self`` swallow the ``value`` argument, producing
+        ``JSON.serialize() missing 1 required positional argument: 'value'``
+        and silently dropping every JSON-typed mutation variable (e.g. the
+        A2A task ``inputData`` / ``outputData`` fields), so tasks are never
+        persisted and ``tasks/get`` returns "Task not found".
+
+        The key style is read from the ``_key_style`` class attribute so
+        subclasses (JSONCamelCase / JSONSnakeCase) get the right transform.
 
         Args:
             value: Input value to serialize
@@ -917,10 +930,13 @@ class JSON(graphene.Scalar):
             JSON value with keys converted to configured style
         """
         raw_value = JSON.identity(value)
-        return self.transform_dict_keys(raw_value, self._key_style)
+        return JSON.transform_dict_keys(raw_value, JSON._key_style)
 
-    def parse_value(self, value: Any) -> Any:
+    @staticmethod
+    def parse_value(value: Any) -> Any:
         """Parse value from JSON with reverse key style conversion.
+
+        Must be ``@staticmethod`` — see ``serialize`` above.
 
         Args:
             value: Input value to parse
@@ -929,7 +945,12 @@ class JSON(graphene.Scalar):
             Parsed value with keys converted from configured style
         """
         raw_value = JSON.identity(value)
-        return self.transform_dict_keys(raw_value, self._get_reversed_key_style())
+        reversed_style = (
+            NamingConvention.SNAKE
+            if JSON._key_style == NamingConvention.CAMEL
+            else NamingConvention.CAMEL
+        )
+        return JSON.transform_dict_keys(raw_value, reversed_style)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
