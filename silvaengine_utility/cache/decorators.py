@@ -175,6 +175,21 @@ def method_cache(
     )
 
 
+
+def _constructor_fingerprint(parameters: dict) -> str:
+    """构造 stable 指纹：JSON（sort_keys）+ 不可序列化对象回退 str()。
+
+    logger 等 SDK 对象经 ``default=str`` 稳定序列化（Logger.__repr__ 不含
+    内存地址），settings 源自 DDB 为纯数据。指纹仅用于相等性比较。
+    """
+    import json as _json
+
+    try:
+        return _json.dumps(parameters, sort_keys=True, default=str)
+    except Exception:
+        return repr(sorted((k, str(v)) for k, v in parameters.items()))
+
+
 def object_cache(func: Callable) -> Callable:
     """
     Decorator to cache dynamically imported objects with thread safety.
@@ -267,7 +282,19 @@ def object_cache(func: Callable) -> Callable:
                 ) and inspect.ismethod(invoker)
 
                 if is_instance_method:
-                    invoker.__self__.__init__(**parameters)
+                    # 参数指纹门闩：constructor_parameters（logger + endpoint 级
+                    # settings，源自 DDB，容器级稳定）未变化时跳过 __init__ 重调，
+                    # 避免每个请求重复执行引擎重初始化（DDL/迁移/索引建立）。
+                    # 指纹变化（配置更新/换 logger）时仍会重初始化，保留
+                    # "配置变更即生效"契约。
+                    instance = invoker.__self__
+                    fingerprint = _constructor_fingerprint(parameters)
+                    if getattr(instance, "_object_cache_init_fp", None) != fingerprint:
+                        instance.__init__(**parameters)
+                        try:
+                            instance._object_cache_init_fp = fingerprint
+                        except Exception:
+                            pass
                 elif hasattr(invoker, "__init__"):
                     invoker.__init__(**parameters)
             return invoker
