@@ -156,7 +156,6 @@ class Graphql(object):
             if isinstance(params.get("context"), dict):
                 context.update(**params.get("context", {}))
 
-            print(">>>>>>>>>>> Context:", context)
 
             query = params.get("query")
 
