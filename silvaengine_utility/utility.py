@@ -5,7 +5,7 @@ from __future__ import print_function
 import re
 import socket
 import struct
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 __author__ = "bibow"
 

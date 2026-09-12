@@ -5,10 +5,8 @@ from __future__ import print_function
 import functools
 import logging
 import threading
-import time
 from decimal import Decimal
-from enum import Enum
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
 import graphene
@@ -363,11 +361,6 @@ class Graphql(object):
         variables: dict[str, Any] = {},
         aws_lambda: boto3.client = None,
     ) -> dict[str, Any]:
-        # exclude = ["logger", "setting"]
-
-        # for k in exclude:
-        #     context.pop(k)
-
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,

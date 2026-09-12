@@ -13,7 +13,7 @@ import functools
 import inspect
 from typing import Any, Callable, Optional, Union
 
-from .hybrid_cache import HybridCacheEngine, default_cache
+from .hybrid_cache import HybridCacheEngine
 from .object_cache import ObjectCacheEngine
 
 

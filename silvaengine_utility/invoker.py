@@ -10,13 +10,11 @@ import traceback
 from importlib import import_module
 from importlib.util import find_spec
 from queue import Queue
-from types import CoroutineType, FunctionType
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 import boto3
 
 from .cache.decorators import object_cache
-from .debugger import Debugger
 from .serializer import Serializer
 
 

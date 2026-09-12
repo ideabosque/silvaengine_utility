@@ -5,7 +5,7 @@ from __future__ import print_function
 __author__ = "bl"
 
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 
 class HttpVerb:
