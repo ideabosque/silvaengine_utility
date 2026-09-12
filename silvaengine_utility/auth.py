@@ -28,6 +28,27 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+class AdminAccessRequiredError(Exception):
+    """Mutation 需要 admin 权限但当前用户非管理员时抛出。
+
+    网关层 ``PermAuthorizer`` 验证 JWT 后将 ``is_admin`` 注入
+    ``info.context``。本守卫读取该字段，缺失或为 False 时拒绝执行，
+    防止普通用户调用管理员级写操作（enableUser / disableUser 等）。
+
+    Attributes:
+        mutation_name: 触发守卫的 Mutation 名称，用于定位。
+        message: 人类可读错误描述。
+    """
+
+    def __init__(self, mutation_name: str, message: Optional[str] = None) -> None:
+        self.mutation_name = mutation_name
+        self.message = message or (
+            f"Mutation {mutation_name} 需要管理员权限，"
+            f"当前用户不是管理员。"
+        )
+        super().__init__(self.message)
+
+
 class OperatorIdRequiredError(Exception):
     """Mutation 缺少 operator_id（操作人 ID）时抛出。
 
@@ -90,3 +111,41 @@ def require_operator_id(info: Any, mutation_name: str) -> str:
         )
         raise OperatorIdRequiredError(mutation_name)
     return operator_id
+
+
+def is_admin(info: Any) -> bool:
+    """从 GraphQL context 读取 ``is_admin`` 标志。
+
+    网关层 ``PermAuthorizer`` 验证 JWT 后将 ``is_admin`` 注入
+    ``info.context``。本函数安全读取该字段，缺失时返回 False。
+
+    Args:
+        info: GraphQL ``ResolveInfo`` 或含 ``context`` 属性的伪对象。
+
+    Returns:
+        True 如果当前用户拥有管理员角色，否则 False。
+    """
+    return bool(info.context.get("is_admin", False))
+
+
+def require_admin(info: Any, mutation_name: str) -> None:
+    """守卫函数：校验当前用户是否为管理员，否则抛出 ``AdminAccessRequiredError``。
+
+    用于管理员级写操作（enableUser / disableUser / deleteUser /
+    approveMerchant 等）的权限守卫。在 ``require_operator_id`` 之后调用，
+    确保操作人已认证且具备管理员角色。
+
+    Args:
+        info: GraphQL ``ResolveInfo`` 或含 ``context`` 属性的伪对象。
+        mutation_name: Mutation 名称，用于异常定位与日志标识。
+
+    Raises:
+        AdminAccessRequiredError: ``info.context["is_admin"]`` 为 False
+            或缺失时抛出。
+    """
+    if not is_admin(info):
+        logger.warning(
+            "[auth] Mutation 需要管理员权限，拒绝执行: mutation=%s",
+            mutation_name,
+        )
+        raise AdminAccessRequiredError(mutation_name)
