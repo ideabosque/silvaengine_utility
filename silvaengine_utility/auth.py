@@ -117,7 +117,8 @@ def is_admin(info: Any) -> bool:
     """从 GraphQL context 读取 ``is_admin`` 标志。
 
     网关层 ``PermAuthorizer`` 验证 JWT 后将 ``is_admin`` 注入
-    ``info.context``。本函数安全读取该字段，缺失时返回 False。
+    ``info.context``。``is_admin`` 为 True 表示用户拥有至少一个平台级角色
+    （``tenant_id IS NULL``），即系统管理员。本函数安全读取该字段，缺失时返回 False。
 
     Args:
         info: GraphQL ``ResolveInfo`` 或含 ``context`` 属性的伪对象。
@@ -129,11 +130,14 @@ def is_admin(info: Any) -> bool:
 
 
 def require_admin(info: Any, mutation_name: str) -> None:
-    """守卫函数：校验当前用户是否为管理员，否则抛出 ``AdminAccessRequiredError``。
+    """守卫函数：校验当前用户是否为系统管理员，否则抛出 ``AdminAccessRequiredError``。
 
     用于管理员级写操作（enableUser / disableUser / deleteUser /
     approveMerchant 等）的权限守卫。在 ``require_operator_id`` 之后调用，
-    确保操作人已认证且具备管理员角色。
+    确保操作人已认证且具备平台级角色（``is_admin`` 为 True）。
+
+    ``is_admin`` 为 True 表示用户拥有至少一个平台级角色（``tenant_id IS NULL``），
+    即系统管理员。商户管理员（``tenant_id IS NOT NULL``）不通过此守卫。
 
     Args:
         info: GraphQL ``ResolveInfo`` 或含 ``context`` 属性的伪对象。
