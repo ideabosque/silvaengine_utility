@@ -18,8 +18,15 @@ prompt / setting 三模块近乎完全重复的 ``models/idempotency.py`` 实现
 - 禁止钟摆效应：``find`` 失败统一上抛（由装饰器决定降级或拒绝），三模块
   行为一致，消除「monitor 包 try/except、prompt/setting 不包」的漂移。
 
-复合主键 ``(partition_key, idempotency_key)``，WHERE 子句强制
-``partition_key = :pk``。
+方案 B 语义切换（DB_TENANT_REFACTOR_PLAN B 批次，2026-09-18）：
+- 原复合主键 ``(partition_key, idempotency_key)`` 中的 ``partition_key``
+  为全局部署常量（如 ``banyan#ideabosque``），从未起过实际隔离作用；
+- 幂等隔离键切换为 ``idempotency_scope``：由令牌 claims 的 ``tenant_id``
+  派生（租户级操作 = 租户 UUID 字符串；平台级操作 tenant_id 空 = 哨兵
+  ``'PLATFORM'``），复合主键变为 ``(idempotency_scope, idempotency_key)``；
+- 装饰器签名与调用形态完全不变（315 处引擎侧 ``@idempotent_mutation``
+  调用点零改动），scope 由装饰器从 GraphQL context 的 tenant_id claims
+  自行提取。
 """
 
 from __future__ import annotations
@@ -37,28 +44,46 @@ logger = logging.getLogger(__name__)
 
 POOL = "postgres_main"
 
+# 平台级操作（tenant_id claims 为空）的幂等 scope 哨兵。
+PLATFORM_IDEMPOTENCY_SCOPE = "PLATFORM"
+
 SQL_FIND = """
 SELECT idempotency_key, mutation_name, result_payload, created_at
 FROM tenant_idempotency_record
-WHERE partition_key = :pk AND idempotency_key = :idempotency_key
+WHERE idempotency_scope = :scope AND idempotency_key = :idempotency_key
 """
 
 # ON CONFLICT DO NOTHING：并发同 key 时后到者不报错也不覆盖先到者结果。
 # RETURNING idempotency_key 用于判断是否本请求抢占成功（非空即成功）。
 SQL_INSERT = """
 INSERT INTO tenant_idempotency_record (
-    partition_key, idempotency_key, mutation_name, result_payload, created_at
+    idempotency_scope, idempotency_key, mutation_name, result_payload, created_at
 ) VALUES (
-    :pk, :idempotency_key, :mutation_name, :result_payload, :created_at
+    :scope, :idempotency_key, :mutation_name, :result_payload, :created_at
 )
-ON CONFLICT (partition_key, idempotency_key) DO NOTHING
+ON CONFLICT (idempotency_scope, idempotency_key) DO NOTHING
 RETURNING idempotency_key
 """
 
 SQL_PURGE_EXPIRED = """
 DELETE FROM tenant_idempotency_record
-WHERE partition_key = :pk AND created_at < :cutoff
+WHERE idempotency_scope = :scope AND created_at < :cutoff
 """
+
+
+def _extract_idempotency_scope(info: Any) -> str:
+    """从 GraphQL context 提取幂等 scope（方案 B：tenant_id 派生）。
+
+    优先读 context["tenant_id"]（R6 起网关由 access_token claims 注入，
+    平台级操作为 None/空串），空值回落平台哨兵 ``'PLATFORM'``。
+    过渡期内 context 可能仍携带旧键 ``partition_key``（部署常量），仅作
+    日志对照线索，不再参与幂等隔离。
+    """
+    context = getattr(info, "context", None) or {}
+    tenant_id = context.get("tenant_id")
+    if tenant_id:
+        return str(tenant_id)
+    return PLATFORM_IDEMPOTENCY_SCOPE
 
 
 class IdempotencyRepository:
@@ -68,7 +93,7 @@ class IdempotencyRepository:
 
     @staticmethod
     def find(
-        partition_key: str,
+        idempotency_scope: str,
         idempotency_key: str,
     ) -> Optional[Dict[str, Any]]:
         """根据幂等键检索已有记录，返回反序列化后的结果或 None。
@@ -80,7 +105,7 @@ class IdempotencyRepository:
             row = (
                 conn.execute(
                     text(SQL_FIND),
-                    {"pk": partition_key, "idempotency_key": idempotency_key},
+                    {"scope": idempotency_scope, "idempotency_key": idempotency_key},
                 )
                 .mappings()
                 .first()
@@ -101,7 +126,7 @@ class IdempotencyRepository:
 
     @staticmethod
     def store(
-        partition_key: str,
+        idempotency_scope: str,
         idempotency_key: str,
         mutation_name: str,
         result: Any,
@@ -123,7 +148,7 @@ class IdempotencyRepository:
                 conn.execute(
                     text(SQL_INSERT),
                     {
-                        "pk": partition_key,
+                        "scope": idempotency_scope,
                         "idempotency_key": idempotency_key,
                         "mutation_name": mutation_name,
                         "result_payload": payload_str,
@@ -136,7 +161,7 @@ class IdempotencyRepository:
         return row is not None
 
     @staticmethod
-    def purge_expired(partition_key: str, retention_seconds: int) -> int:
+    def purge_expired(idempotency_scope: str, retention_seconds: int) -> int:
         """清理超过保留期的幂等记录，返回删除行数。
 
         建议 by 定时任务调用（如每日），``retention_seconds`` 推荐 7 天
@@ -146,13 +171,13 @@ class IdempotencyRepository:
         with ConnectionPoolManager().connection(IdempotencyRepository.POOL) as conn:
             result = conn.execute(
                 text(SQL_PURGE_EXPIRED),
-                {"pk": partition_key, "cutoff": cutoff},
+                {"scope": idempotency_scope, "cutoff": cutoff},
             )
             return result.rowcount or 0
 
 
 def check_and_store(
-    partition_key: str,
+    idempotency_scope: str,
     idempotency_key: str,
     mutation_name: str,
 ) -> Optional[Dict[str, Any]]:
@@ -164,7 +189,7 @@ def check_and_store(
     Returns:
         已有结果（``existing["result"]``），或 None 表示首次请求。
     """
-    existing = IdempotencyRepository.find(partition_key, idempotency_key)
+    existing = IdempotencyRepository.find(idempotency_scope, idempotency_key)
     if existing is not None:
         logger.info(
             "[idempotency] 命中幂等记录: mutation=%s key=%s",
@@ -176,7 +201,7 @@ def check_and_store(
 
 
 def store_result(
-    partition_key: str,
+    idempotency_scope: str,
     idempotency_key: str,
     mutation_name: str,
     result: Any,
@@ -192,7 +217,7 @@ def store_result(
     """
     try:
         inserted = IdempotencyRepository.store(
-            partition_key, idempotency_key, mutation_name, result
+            idempotency_scope, idempotency_key, mutation_name, result
         )
     except Exception as exc:
         # 不静默吞掉：业务已成功但幂等未落库，客户端重试会重复执行。
@@ -214,14 +239,13 @@ def store_result(
         )
 
 
-def purge_expired(partition_key: str, retention_seconds: int = 604800) -> int:
+def purge_expired(idempotency_scope: str, retention_seconds: int = 604800) -> int:
     """清理超过保留期的幂等记录（便捷封装）。
 
     默认保留 7 天（604800 秒）。建议由定时任务每日调用。返回删除行数。
     ``created_at`` 上建议建索引以加速清理。
     """
-    return IdempotencyRepository.purge_expired(partition_key, retention_seconds)
-
+    return IdempotencyRepository.purge_expired(idempotency_scope, retention_seconds)
 
 
 def idempotent_mutation(mutation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -255,6 +279,10 @@ def idempotent_mutation(mutation_name: str) -> Callable[[Callable[..., Any]], Ca
     - 无 ``info`` 或无 ``idempotency_key`` 时直接执行 mutation（与现有完全一致）。
     - ``info`` 取 ``args[1]`` 或 ``kwargs.get("info")``（与现有一致）。
 
+    方案 B 语义切换：幂等 scope 由本装饰器从 GraphQL context 的 tenant_id
+    claims 提取（空 = 平台哨兵 ``'PLATFORM'``），不再读取旧键
+    ``partition_key``；``@idempotent_mutation`` 调用形态完全不变。
+
     Args:
         mutation_name: Mutation 名称，用于幂等记录的 ``mutation_name`` 字段
             与日志标识，便于跨模块统一观测。
@@ -271,10 +299,10 @@ def idempotent_mutation(mutation_name: str) -> Callable[[Callable[..., Any]], Ca
             if info is None or not idempotency_key:
                 return func(*args, **kwargs)
 
-            partition_key = info.context.get("partition_key", "")
+            idempotency_scope = _extract_idempotency_scope(info)
             try:
                 existing = check_and_store(
-                    partition_key, idempotency_key, mutation_name
+                    idempotency_scope, idempotency_key, mutation_name
                 )
                 if existing is not None:
                     return existing
@@ -290,7 +318,7 @@ def idempotent_mutation(mutation_name: str) -> Callable[[Callable[..., Any]], Ca
             result = func(*args, **kwargs)
             try:
                 store_result(
-                    partition_key, idempotency_key, mutation_name, result
+                    idempotency_scope, idempotency_key, mutation_name, result
                 )
             except Exception as exc:
                 logger.error(

@@ -70,14 +70,67 @@ class TestRequireOperatorId:
         assert "UpdateZzz" in exc_info.value.message
 
 
+class TestIdempotencyScopeExtraction:
+    """方案 B：幂等 scope 从 context 的 tenant_id claims 派生。"""
+
+    def test_scope_from_tenant_id_claim(self):
+        """tenant_id 非空 → scope = 租户 UUID 字符串。"""
+        from silvaengine_utility.idempotency import _extract_idempotency_scope
+
+        info = SimpleNamespace(context={"tenant_id": "4644cc70-1d9e-4f7d-bb5e-fd02ed52710c"})
+        assert _extract_idempotency_scope(info) == "4644cc70-1d9e-4f7d-bb5e-fd02ed52710c"
+
+    def test_scope_platform_sentinel_when_tenant_id_missing(self):
+        """tenant_id 缺失/空 → 平台哨兵 'PLATFORM'（R2：空 = 平台级）。"""
+        from silvaengine_utility.idempotency import (
+            PLATFORM_IDEMPOTENCY_SCOPE,
+            _extract_idempotency_scope,
+        )
+
+        assert _extract_idempotency_scope(SimpleNamespace(context={})) == PLATFORM_IDEMPOTENCY_SCOPE
+        assert _extract_idempotency_scope(SimpleNamespace(context={"tenant_id": None})) == PLATFORM_IDEMPOTENCY_SCOPE
+        assert _extract_idempotency_scope(SimpleNamespace(context={"tenant_id": ""})) == PLATFORM_IDEMPOTENCY_SCOPE
+
+    def test_decorator_passes_scope_to_check_and_store(self):
+        """装饰器用提取的 scope 调用 check_and_store/store_result。"""
+        calls = []
+
+        @idempotent_mutation("Mut")
+        def mutate(root, info, **kwargs):
+            calls.append(1)
+            return {"node": "ok"}
+
+        with patch("silvaengine_utility.idempotency.check_and_store") as mock_check, \
+             patch("silvaengine_utility.idempotency.store_result") as mock_store:
+            mock_check.return_value = None
+            info = SimpleNamespace(context={"tenant_id": "tenant-uuid-1"})
+            assert mutate(None, info, idempotency_key="k1") == {"node": "ok"}
+            assert mock_check.call_args.args[0] == "tenant-uuid-1"
+            assert mock_store.call_args.args[0] == "tenant-uuid-1"
+
+    def test_decorator_platform_scope_without_tenant(self):
+        """无 tenant claims 的请求 scope = 'PLATFORM'。"""
+        from silvaengine_utility.idempotency import PLATFORM_IDEMPOTENCY_SCOPE
+
+        @idempotent_mutation("Mut")
+        def mutate(root, info, **kwargs):
+            return {"node": "ok"}
+
+        with patch("silvaengine_utility.idempotency.check_and_store") as mock_check, \
+             patch("silvaengine_utility.idempotency.store_result") as mock_store:
+            mock_check.return_value = None
+            assert mutate(None, _info(), idempotency_key="k1") == {"node": "ok"}
+            assert mock_check.call_args.args[0] == PLATFORM_IDEMPOTENCY_SCOPE
+
+
 # ---------------------------------------------------------------------------
 # idempotent_mutation decorator
 # ---------------------------------------------------------------------------
 
 
-def _info(pk="pk-1"):
-    """构造含 partition_key 的伪 info 对象。"""
-    return SimpleNamespace(context={"partition_key": pk})
+def _info(tenant_id=None):
+    """构造含 tenant_id claims 的伪 info 对象（方案 B：幂等 scope 来源）。"""
+    return SimpleNamespace(context={"tenant_id": tenant_id})
 
 
 class TestIdempotentMutationKeyRetrieval:

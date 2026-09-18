@@ -15,9 +15,10 @@
   仅升级异常类型（结构化错误码），不改变"缺失即拒绝"的行为。
 
 读取 ``info.context`` 的 key 优先级：``user_id`` → ``operator_id``（与各模块
-现有变体 A 一致）。``partition_key`` / ``user_name`` 等其它 context 字段
-仍由各模块自行读取（业务模块可能附加 ``ip_address`` / ``user_agent`` 等，
-不在此收敛）。
+现有变体 A 一致）。``tenant_id`` / ``merchant_id``（R6 claims）/ ``user_name``
+等其它 context 字段仍由各模块自行读取（业务模块可能附加 ``ip_address`` /
+``user_agent`` 等，不在此收敛）；幂等 scope 的 tenant_id 派生见
+``idempotency._extract_idempotency_scope``（方案 B）。
 """
 
 from __future__ import annotations
