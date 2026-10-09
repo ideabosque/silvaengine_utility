@@ -18,8 +18,11 @@ prompt / setting 三模块近乎完全重复的 ``models/idempotency.py`` 实现
 - 禁止钟摆效应：``find`` 失败统一上抛（由装饰器决定降级或拒绝），三模块
   行为一致，消除「monitor 包 try/except、prompt/setting 不包」的漂移。
 
-复合主键 ``(partition_key, idempotency_key)``，WHERE 子句强制
-``partition_key = :pk``。
+复合主键 ``(idempotency_scope, idempotency_key)``，WHERE 子句强制
+``idempotency_scope = :pk``。``scope`` 的语义来源由调用方决定——
+``idempotent_mutation`` 装饰器历史上传入 ``partition_key``（方案 A），
+已迁移到方案 B（tenant_id 口径）的调用方可改用
+``_extract_idempotency_scope`` 派生后直接调用本模块的函数。
 """
 
 from __future__ import annotations
@@ -40,24 +43,24 @@ POOL = "postgres_main"
 SQL_FIND = """
 SELECT idempotency_key, mutation_name, result_payload, created_at
 FROM tenant_idempotency_record
-WHERE partition_key = :pk AND idempotency_key = :idempotency_key
+WHERE idempotency_scope = :pk AND idempotency_key = :idempotency_key
 """
 
 # ON CONFLICT DO NOTHING：并发同 key 时后到者不报错也不覆盖先到者结果。
 # RETURNING idempotency_key 用于判断是否本请求抢占成功（非空即成功）。
 SQL_INSERT = """
 INSERT INTO tenant_idempotency_record (
-    partition_key, idempotency_key, mutation_name, result_payload, created_at
+    idempotency_scope, idempotency_key, mutation_name, result_payload, created_at
 ) VALUES (
     :pk, :idempotency_key, :mutation_name, :result_payload, :created_at
 )
-ON CONFLICT (partition_key, idempotency_key) DO NOTHING
+ON CONFLICT (idempotency_scope, idempotency_key) DO NOTHING
 RETURNING idempotency_key
 """
 
 SQL_PURGE_EXPIRED = """
 DELETE FROM tenant_idempotency_record
-WHERE partition_key = :pk AND created_at < :cutoff
+WHERE idempotency_scope = :pk AND created_at < :cutoff
 """
 
 
@@ -212,6 +215,22 @@ def store_result(
             mutation_name,
             idempotency_key,
         )
+
+
+def _extract_idempotency_scope(info: Any) -> str:
+    """派生幂等记录的 scope（方案 B：tenant_id 口径，空字符串 = 平台哨兵）。
+
+    与 ``idempotent_mutation`` 内部仍用的旧 ``partition_key`` 口径不同——
+    已迁移到方案 B（``partition_key`` 退役，数据域由 context 的
+    ``tenant_id`` claim 承担）的调用方（如 user_engine 的运维清理
+    mutation）需要按 ``tenant_id`` 而非 ``partition_key`` 隔离幂等记录，
+    直接调用 ``purge_expired(scope, ...)`` 等共享层函数时使用本函数
+    派生 scope。``tenant_id`` 缺失/为 None 时返回空字符串，作为平台级
+    （跨租户）记录的统一哨兵值，与既有 ``tenant_id IS NULL`` = 平台
+    语义一致。
+    """
+    tenant_id = (info.context or {}).get("tenant_id") if info is not None else None
+    return str(tenant_id) if tenant_id else ""
 
 
 def purge_expired(partition_key: str, retention_seconds: int = 604800) -> int:
