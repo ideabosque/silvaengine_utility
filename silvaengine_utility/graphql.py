@@ -5,10 +5,8 @@ from __future__ import print_function
 import functools
 import logging
 import threading
-import time
 from decimal import Decimal
-from enum import Enum
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
 import graphene
@@ -76,6 +74,50 @@ def graphql_service_initialization(func: Callable) -> Callable:
     return wrapper_function
 
 
+def _coerce_variable_values(value: Any) -> Any:
+    """Recursively convert Decimal values to float in GraphQL variables.
+
+    ``Serializer.json_loads`` parses JSON floats as ``Decimal`` by default
+    (``parse_float=Decimal``).  However, ``graphql-core``'s ``GraphQLFloat``
+    scalar only accepts native ``int``/``float`` — ``Decimal`` values cause
+    ``"Float cannot represent non numeric value"`` validation errors.
+
+    This helper walks the variable tree and converts ``Decimal`` to
+    ``float`` so that graphene can validate and coerce them correctly.
+    Integers (parsed as ``int`` by ``json_loads``) are left untouched.
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {k: _coerce_variable_values(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_coerce_variable_values(v) for v in value]
+    return value
+
+
+def _is_subscription_operation(query: str) -> bool:
+    """Detect whether a GraphQL operation is a subscription type.
+
+    Uses graphql-core's ``parse()`` to inspect the AST and check
+    for ``OperationType.SUBSCRIPTION`` definitions.
+
+    Returns ``False`` on parse errors so that non-subscription
+    queries fall through to the normal execution path.
+    """
+    from graphql import parse
+    from graphql.language.ast import OperationDefinitionNode
+
+    try:
+        document = parse(query)
+        for definition in document.definitions:
+            if isinstance(definition, OperationDefinitionNode):
+                if definition.operation.value == "subscription":
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 class Graphql(object):
     _graphql_schema_cache: Dict[str, Any] = {}
     _graphql_query_cache: Dict[str, str] = {}
@@ -112,35 +154,67 @@ class Graphql(object):
             if isinstance(params.get("context"), dict):
                 context.update(**params.get("context", {}))
 
+
             query = params.get("query")
 
             if not query:
                 return Graphql.error_response(errors="Invalid operations")
 
+            # Serializer.json_loads converts JSON floats to Decimal by
+            # default (parse_float=Decimal).  graphql-core's GraphQLFloat
+            # and GraphQLInt scalars only accept native int/float, so
+            # Decimal values in variables cause validation errors.
+            # Preserve dev's shared conversion for both normal operations
+            # and subscriptions (including exact integral Decimal values).
+            variable_values = Serializer.json_handler.convert_decimal_to_number(
+                params.get("variables", {})
+            )
+
+            # Subscription operations require a different execution path
+            # (schema.subscribe instead of schema.execute_async) and push
+            # events to the WebSocket client via post_to_connection.
+            if _is_subscription_operation(query):
+                return self._execute_subscription(
+                    schema=schema,
+                    query=query,
+                    context=context,
+                    variable_values=variable_values,
+                    operation_name=params.get("operation_name"),
+                    connection_id=params.get("connection_id"),
+                    aws_api_stage=params.get("stage"),
+                    aws_api_area=params.get("area"),
+                )
+
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
                     context_value=context,
-                    variable_values=params.get("variables", {}),
+                    variable_values=variable_values,
                     operation_name=params.get("operation_name"),
                 )
             )
 
             if execution_result:
-                # Check for errors first - GraphQL can have both data and errors
+                # GraphQL spec: a response can contain both `data` (partial)
+                # and `errors` simultaneously.  Return 200 with both keys so
+                # clients don't lose successfully-resolved fields.
                 if execution_result.errors:
                     Debugger.info(
                         variable=f"Query: {query}, Variables: {params.get('variables', {})}, Errors: {execution_result.errors}",
                         stage="Graphql Debug(execute result)",
                         setting=self.setting,
                     )
-                    return Graphql.error_response(
-                        errors=[
-                            Utility.format_error(e) for e in execution_result.errors
-                        ],
-                        status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
-                    )
-                elif execution_result.data:
+                    formatted_errors = [
+                        Utility.format_error(e) for e in execution_result.errors
+                    ]
+                    # HTTP 200 for application-level GraphQL errors (resolver
+                    # errors, validation errors).  HTTP 500 is reserved for
+                    # transport/infrastructure failures.
+                    body: Dict[str, Any] = {"errors": formatted_errors}
+                    if execution_result.data is not None:
+                        body["data"] = execution_result.data
+                    return HttpResponse.format_response(body, HttpStatus.OK.value)
+                elif execution_result.data is not None:
                     return Graphql.success_response(data=execution_result.data)
 
             return Graphql.error_response(
@@ -153,8 +227,116 @@ class Graphql(object):
                 stage="Graphql Debug(execute)",
                 setting=self.setting,
             )
+            # Log the full exception internally; return a generic message to
+            # the client to avoid leaking internal implementation details.
             return Graphql.error_response(
-                errors=str(e),
+                errors="Internal server error",
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+
+    def _execute_subscription(
+        self,
+        schema: Schema,
+        query: str,
+        context: Dict[str, Any],
+        variable_values: Dict[str, Any],
+        operation_name: Optional[str],
+        connection_id: Optional[str],
+        aws_api_stage: Optional[str],
+        aws_api_area: Optional[str],
+    ) -> Any:
+        """Execute a GraphQL subscription operation.
+
+        Calls ``schema.subscribe()`` to obtain an async iterator of
+        ``ExecutionResult`` events, then pushes each event to the
+        WebSocket client via ``ApiGatewayManagementApi.post_to_connection``.
+
+        Requires ``connection_id`` (WebSocket connection ID). The
+        endpoint URL is resolved from ``self.setting`` or environment
+        variables by :class:`WebSocketStreamer`.
+
+        Returns an HTTP response indicating completion or error.
+        """
+        import asyncio
+
+        from .streaming import WebSocketStreamer
+
+        if not connection_id:
+            return Graphql.error_response(
+                errors="Subscription requires connection_id (WebSocket connection).",
+                status_code=HttpStatus.BAD_REQUEST.value,
+            )
+
+        streamer = WebSocketStreamer(
+            connection_id=connection_id,
+            aws_api_stage=aws_api_stage,
+            aws_api_area=aws_api_area,
+            setting=self.setting,
+            logger=self.logger,
+        )
+
+        async def _consume_subscription():
+            # schema.subscribe() returns an AsyncIterator[ExecutionResult]
+            # when successful, or an ExecutionResult with errors on failure.
+            subscribe_result = await schema.subscribe(
+                query,
+                context_value=context,
+                variable_values=variable_values,
+                operation_name=operation_name,
+            )
+
+            # If subscribe returned an ExecutionResult with errors
+            if hasattr(subscribe_result, "errors") and subscribe_result.errors:
+                return subscribe_result.errors
+
+            # Iterate over events and push each to the WebSocket client
+            async for execution_result in subscribe_result:
+                payload: Dict[str, Any] = {}
+                if execution_result.data is not None:
+                    payload["data"] = execution_result.data
+                if execution_result.errors:
+                    payload["errors"] = [
+                        Utility.format_error(e) for e in execution_result.errors
+                    ]
+                if payload:
+                    await streamer.send(payload)
+
+            return None
+
+        # ``asyncio.run`` 要求当前线程无运行中的 event loop。
+        # 本方法假定由同步 Lambda handler 调用；若被 async 上下文复用，
+        # 显式返回错误而非抛 RuntimeError，便于上层诊断。
+        try:
+            asyncio.get_running_loop()
+            return Graphql.error_response(
+                errors=(
+                    "Subscription cannot be executed within a running event "
+                    "loop; Graphql.execute() must be called from a sync "
+                    "context."
+                ),
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+        except RuntimeError:
+            # 无运行中的 loop —— 正常路径，继续 asyncio.run
+            pass
+
+        try:
+            errors = asyncio.run(_consume_subscription())
+            if errors:
+                formatted = [Utility.format_error(e) for e in errors]
+                return Graphql.error_response(errors=formatted)
+            # Subscription completed successfully
+            return Graphql.success_response(
+                data={"subscription": "completed"}
+            )
+        except Exception as e:
+            Debugger.info(
+                variable=e,
+                stage="Graphql Debug(subscription)",
+                setting=self.setting,
+            )
+            return Graphql.error_response(
+                errors="Subscription execution error",
                 status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
 
@@ -182,11 +364,6 @@ class Graphql(object):
         variables: dict[str, Any] = {},
         aws_lambda: boto3.client = None,
     ) -> dict[str, Any]:
-        # exclude = ["logger", "setting"]
-
-        # for k in exclude:
-        #     context.pop(k)
-
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,
@@ -725,8 +902,21 @@ class JSON(graphene.Scalar):
             return NamingConvention.SNAKE
         return NamingConvention.CAMEL
 
-    def serialize(self, value: Any) -> Any:
+    @staticmethod
+    def serialize(value: Any) -> Any:
         """Serialize value to JSON with key style conversion.
+
+        graphene's Scalar coercion contract calls ``serialize`` /
+        ``parse_value`` as static methods (without an instance), so these
+        MUST be ``@staticmethod`` — defining them as instance methods makes
+        ``self`` swallow the ``value`` argument, producing
+        ``JSON.serialize() missing 1 required positional argument: 'value'``
+        and silently dropping every JSON-typed mutation variable (e.g. the
+        A2A task ``inputData`` / ``outputData`` fields), so tasks are never
+        persisted and ``tasks/get`` returns "Task not found".
+
+        The key style is read from the ``_key_style`` class attribute so
+        subclasses (JSONCamelCase / JSONSnakeCase) get the right transform.
 
         Args:
             value: Input value to serialize
@@ -735,10 +925,13 @@ class JSON(graphene.Scalar):
             JSON value with keys converted to configured style
         """
         raw_value = JSON.identity(value)
-        return self.transform_dict_keys(raw_value, self._key_style)
+        return JSON.transform_dict_keys(raw_value, JSON._key_style)
 
-    def parse_value(self, value: Any) -> Any:
+    @staticmethod
+    def parse_value(value: Any) -> Any:
         """Parse value from JSON with reverse key style conversion.
+
+        Must be ``@staticmethod`` — see ``serialize`` above.
 
         Args:
             value: Input value to parse
@@ -747,7 +940,12 @@ class JSON(graphene.Scalar):
             Parsed value with keys converted from configured style
         """
         raw_value = JSON.identity(value)
-        return self.transform_dict_keys(raw_value, self._get_reversed_key_style())
+        reversed_style = (
+            NamingConvention.SNAKE
+            if JSON._key_style == NamingConvention.CAMEL
+            else NamingConvention.CAMEL
+        )
+        return JSON.transform_dict_keys(raw_value, reversed_style)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:

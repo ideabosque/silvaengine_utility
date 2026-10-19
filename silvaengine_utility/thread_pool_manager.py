@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 from typing import Optional
-import concurrent.futures, atexit, functools
+import concurrent.futures, atexit
 
 class ThreadPoolManager:
     _instance: Optional['ThreadPoolManager'] = None
@@ -68,10 +68,9 @@ def get_global_thread_pool(max_workers: int = None) -> concurrent.futures.Thread
     return thread_pool_manager.get_pool(max_workers)
 
 def shutdown_global_thread_pool(wait: bool = True):
-    thread_pool_manager._shutdown_pool(wait)
-
     """Shutdown global thread pool, release resources.
     
     Args:
         wait: Whether to wait for pending tasks to complete before shutting down.
     """
+    thread_pool_manager._shutdown_pool(wait)

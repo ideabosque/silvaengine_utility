@@ -12,6 +12,7 @@ __author__ = "bibow"
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Union
+from uuid import UUID
 
 import pendulum
 
@@ -86,6 +87,10 @@ class HighPerformanceJSONHandler:
         # Handle datetime/date - use ISO format for consistency
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
+
+        # Handle UUID - convert to string (DB native type from PostgreSQL UUID columns)
+        elif isinstance(obj, UUID):
+            return str(obj)
 
         # Handle SQLAlchemy models - use comprehensive approach
         elif (
