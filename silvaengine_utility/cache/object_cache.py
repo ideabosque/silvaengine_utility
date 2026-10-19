@@ -2,10 +2,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-import functools
-import inspect
 import threading
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 
 class ObjectCacheEngine:

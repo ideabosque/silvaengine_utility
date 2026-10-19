@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 
 from .datetime_handler import PendulumDateTimeHandler
 from .json_handler import HighPerformanceJSONHandler

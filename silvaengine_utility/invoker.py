@@ -10,13 +10,11 @@ import traceback
 from importlib import import_module
 from importlib.util import find_spec
 from queue import Queue
-from types import CoroutineType, FunctionType
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 import boto3
 
 from .cache.decorators import object_cache
-from .debugger import Debugger
 from .serializer import Serializer
 
 
@@ -36,6 +34,22 @@ class Invoker(object):
     @staticmethod
     def is_instance_method(method) -> bool:
         return inspect.ismethod(method)
+
+    @staticmethod
+    def build_invoker_payload(
+        context: Dict[str, Any],
+        module_name: str,
+        function_name: str,
+        class_name: Optional[str],
+        parameters: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        return {
+            "context": context,
+            "module_name": str(module_name).strip(),
+            "function_name": str(function_name).strip(),
+            "class_name": class_name,
+            "parameters": parameters,
+        }
 
     @staticmethod
     @object_cache
@@ -208,11 +222,6 @@ class Invoker(object):
             "funct": kwargs["funct"],
             "params": kwargs["params"],
         }
-
-        Debugger.info(
-            variable=f"Function: {function_name}, Payload: {payload}",
-            stage=__name__,
-        )
 
         response = aws_lambda.invoke(
             FunctionName=function_name,

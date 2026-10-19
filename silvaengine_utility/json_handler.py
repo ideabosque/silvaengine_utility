@@ -9,9 +9,12 @@ with built-in performance tracking and fallback to standard json library.
 
 __author__ = "bibow"
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Union
+from uuid import UUID
+
+import pendulum
 
 # Try to import orjson for high performance, fallback to standard json
 try:
@@ -84,6 +87,10 @@ class HighPerformanceJSONHandler:
         # Handle datetime/date - use ISO format for consistency
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
+
+        # Handle UUID - convert to string (DB native type from PostgreSQL UUID columns)
+        elif isinstance(obj, UUID):
+            return str(obj)
 
         # Handle SQLAlchemy models - use comprehensive approach
         elif (
@@ -386,6 +393,32 @@ class HighPerformanceJSONHandler:
             if obj.as_integer_ratio()[1] == 1:
                 return int(obj)
             return float(obj)
+        elif isinstance(obj, datetime):
+            return pendulum.instance(obj.replace(tzinfo=timezone.utc))
+        else:
+            return obj
+
+    @staticmethod
+    def convert_data_types(obj: Any, parse_datetime_to_string=True) -> Any:
+        if isinstance(obj, dict):
+            return {
+                key: HighPerformanceJSONHandler.convert_data_types(value)
+                for key, value in obj.items()
+            }
+        elif isinstance(obj, (list, tuple)):
+            converted = [
+                HighPerformanceJSONHandler.convert_data_types(item) for item in obj
+            ]
+            return type(obj)(converted)
+        elif isinstance(obj, Decimal):
+            if obj.as_integer_ratio()[1] == 1:
+                return int(obj)
+            return float(obj)
+        elif isinstance(obj, datetime):
+            if parse_datetime_to_string:
+                return obj.replace(tzinfo=timezone.utc).isoformat()
+
+            return pendulum.instance(obj.replace(tzinfo=timezone.utc))
         else:
             return obj
 

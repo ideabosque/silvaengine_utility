@@ -4,15 +4,16 @@ from __future__ import print_function
 
 import functools
 import logging
-from enum import Enum
-from typing import Any, Callable, Dict, Optional, Union
+import threading
+from decimal import Decimal
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import boto3
 import graphene
 from graphene import Schema
+from graphql import ExecutionResult, build_client_schema, get_introspection_query
 from graphql.language import ast
-
-from silvaengine_constants import HttpStatus
+from silvaengine_constants import HttpStatus, NamingConvention, OperationType
 
 from .context import Context
 from .debugger import Debugger
@@ -20,108 +21,6 @@ from .http import HttpResponse
 from .invoker import Invoker
 from .serializer import Serializer
 from .utility import Utility
-
-INTROSPECTION_QUERY = """
-query IntrospectionQuery {
-  __schema {
-    queryType { name }
-    mutationType { name }
-    subscriptionType { name }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
-  }
-}
-
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
-    name
-    description
-    args {
-      ...InputValue
-    }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
-  }
-}
-
-fragment InputValue on __InputValue {
-  name
-  description
-  type { ...TypeRef }
-  defaultValue
-}
-
-fragment TypeRef on __Type {
-  kind
-  name
-  description
-  ofType {
-    kind
-    name
-    description
-    ofType {
-      kind
-      name
-      description
-      ofType {
-        kind
-        name
-        description
-        ofType {
-          kind
-          name
-          description
-          ofType {
-            kind
-            name
-            description
-            ofType {
-              kind
-              name
-              description
-              ofType {
-                kind
-                name
-                description
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
 
 
 def graphql_service_initialization(func: Callable) -> Callable:
@@ -175,7 +74,55 @@ def graphql_service_initialization(func: Callable) -> Callable:
     return wrapper_function
 
 
+def _coerce_variable_values(value: Any) -> Any:
+    """Recursively convert Decimal values to float in GraphQL variables.
+
+    ``Serializer.json_loads`` parses JSON floats as ``Decimal`` by default
+    (``parse_float=Decimal``).  However, ``graphql-core``'s ``GraphQLFloat``
+    scalar only accepts native ``int``/``float`` — ``Decimal`` values cause
+    ``"Float cannot represent non numeric value"`` validation errors.
+
+    This helper walks the variable tree and converts ``Decimal`` to
+    ``float`` so that graphene can validate and coerce them correctly.
+    Integers (parsed as ``int`` by ``json_loads``) are left untouched.
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {k: _coerce_variable_values(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_coerce_variable_values(v) for v in value]
+    return value
+
+
+def _is_subscription_operation(query: str) -> bool:
+    """Detect whether a GraphQL operation is a subscription type.
+
+    Uses graphql-core's ``parse()`` to inspect the AST and check
+    for ``OperationType.SUBSCRIPTION`` definitions.
+
+    Returns ``False`` on parse errors so that non-subscription
+    queries fall through to the normal execution path.
+    """
+    from graphql import parse
+    from graphql.language.ast import OperationDefinitionNode
+
+    try:
+        document = parse(query)
+        for definition in document.definitions:
+            if isinstance(definition, OperationDefinitionNode):
+                if definition.operation.value == "subscription":
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 class Graphql(object):
+    _graphql_schema_cache: Dict[str, Any] = {}
+    _graphql_query_cache: Dict[str, str] = {}
+    _lock: threading.RLock = threading.RLock()
+
     @graphql_service_initialization
     def __init__(
         self,
@@ -188,63 +135,208 @@ class Graphql(object):
     def execute(self, schema: Schema, **params: Dict[str, Any]) -> Any:
         if not isinstance(params, dict):
             raise ValueError("Invalid parameters")
+
         try:
             context = {
                 "logger": self.logger,
                 "setting": self.setting,
+                "aws_api_key": params.get("api_key"),
+                "aws_api_stage": params.get("stage"),
+                "aws_api_area": params.get("area"),
                 "endpoint_id": params.get("endpoint_id"),
                 "connection_id": params.get("connection_id"),
                 "aws_lambda_arn": params.get("aws_lambda_arn"),
             }
 
-            if isinstance(params.get("metadata"), dict) and "metadata" in params:
+            if isinstance(params.get("metadata"), dict):
                 context.update(**params.get("metadata", {}))
 
-            if isinstance(params.get("context"), dict) and "context" in params:
+            if isinstance(params.get("context"), dict):
                 context.update(**params.get("context", {}))
+
 
             query = params.get("query")
 
             if not query:
                 return Graphql.error_response(errors="Invalid operations")
 
-            variables = Serializer.json_handler.convert_decimal_to_number(
+            # Serializer.json_loads converts JSON floats to Decimal by
+            # default (parse_float=Decimal).  graphql-core's GraphQLFloat
+            # and GraphQLInt scalars only accept native int/float, so
+            # Decimal values in variables cause validation errors.
+            # Preserve dev's shared conversion for both normal operations
+            # and subscriptions (including exact integral Decimal values).
+            variable_values = Serializer.json_handler.convert_decimal_to_number(
                 params.get("variables", {})
             )
+
+            # Subscription operations require a different execution path
+            # (schema.subscribe instead of schema.execute_async) and push
+            # events to the WebSocket client via post_to_connection.
+            if _is_subscription_operation(query):
+                return self._execute_subscription(
+                    schema=schema,
+                    query=query,
+                    context=context,
+                    variable_values=variable_values,
+                    operation_name=params.get("operation_name"),
+                    connection_id=params.get("connection_id"),
+                    aws_api_stage=params.get("stage"),
+                    aws_api_area=params.get("area"),
+                )
 
             execution_result = Invoker.sync_call_async_compatible(
                 coroutine_task=schema.execute_async(
                     query,
                     context_value=context,
-                    variable_values=variables,
+                    variable_values=variable_values,
                     operation_name=params.get("operation_name"),
                 )
             )
 
             if execution_result:
-                # Check for errors first - GraphQL can have both data and errors
+                # GraphQL spec: a response can contain both `data` (partial)
+                # and `errors` simultaneously.  Return 200 with both keys so
+                # clients don't lose successfully-resolved fields.
                 if execution_result.errors:
-                    return Graphql.error_response(
-                        errors=[
-                            Utility.format_error(e) for e in execution_result.errors
-                        ],
-                        status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+                    Debugger.info(
+                        variable=f"Query: {query}, Variables: {params.get('variables', {})}, Errors: {execution_result.errors}",
+                        stage="Graphql Debug(execute result)",
+                        setting=self.setting,
                     )
-                elif execution_result.data:
+                    formatted_errors = [
+                        Utility.format_error(e) for e in execution_result.errors
+                    ]
+                    # HTTP 200 for application-level GraphQL errors (resolver
+                    # errors, validation errors).  HTTP 500 is reserved for
+                    # transport/infrastructure failures.
+                    body: Dict[str, Any] = {"errors": formatted_errors}
+                    if execution_result.data is not None:
+                        body["data"] = execution_result.data
+                    return HttpResponse.format_response(body, HttpStatus.OK.value)
+                elif execution_result.data is not None:
                     return Graphql.success_response(data=execution_result.data)
 
             return Graphql.error_response(
-                errors="Uncaught execution error",
+                errors="Invalid execution result",
                 status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
         except Exception as e:
             Debugger.info(
                 variable=e,
                 stage="Graphql Debug(execute)",
-                logger=self.logger,
+                setting=self.setting,
+            )
+            # Log the full exception internally; return a generic message to
+            # the client to avoid leaking internal implementation details.
+            return Graphql.error_response(
+                errors="Internal server error",
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+
+    def _execute_subscription(
+        self,
+        schema: Schema,
+        query: str,
+        context: Dict[str, Any],
+        variable_values: Dict[str, Any],
+        operation_name: Optional[str],
+        connection_id: Optional[str],
+        aws_api_stage: Optional[str],
+        aws_api_area: Optional[str],
+    ) -> Any:
+        """Execute a GraphQL subscription operation.
+
+        Calls ``schema.subscribe()`` to obtain an async iterator of
+        ``ExecutionResult`` events, then pushes each event to the
+        WebSocket client via ``ApiGatewayManagementApi.post_to_connection``.
+
+        Requires ``connection_id`` (WebSocket connection ID). The
+        endpoint URL is resolved from ``self.setting`` or environment
+        variables by :class:`WebSocketStreamer`.
+
+        Returns an HTTP response indicating completion or error.
+        """
+        import asyncio
+
+        from .streaming import WebSocketStreamer
+
+        if not connection_id:
+            return Graphql.error_response(
+                errors="Subscription requires connection_id (WebSocket connection).",
+                status_code=HttpStatus.BAD_REQUEST.value,
+            )
+
+        streamer = WebSocketStreamer(
+            connection_id=connection_id,
+            aws_api_stage=aws_api_stage,
+            aws_api_area=aws_api_area,
+            setting=self.setting,
+            logger=self.logger,
+        )
+
+        async def _consume_subscription():
+            # schema.subscribe() returns an AsyncIterator[ExecutionResult]
+            # when successful, or an ExecutionResult with errors on failure.
+            subscribe_result = await schema.subscribe(
+                query,
+                context_value=context,
+                variable_values=variable_values,
+                operation_name=operation_name,
+            )
+
+            # If subscribe returned an ExecutionResult with errors
+            if hasattr(subscribe_result, "errors") and subscribe_result.errors:
+                return subscribe_result.errors
+
+            # Iterate over events and push each to the WebSocket client
+            async for execution_result in subscribe_result:
+                payload: Dict[str, Any] = {}
+                if execution_result.data is not None:
+                    payload["data"] = execution_result.data
+                if execution_result.errors:
+                    payload["errors"] = [
+                        Utility.format_error(e) for e in execution_result.errors
+                    ]
+                if payload:
+                    await streamer.send(payload)
+
+            return None
+
+        # ``asyncio.run`` 要求当前线程无运行中的 event loop。
+        # 本方法假定由同步 Lambda handler 调用；若被 async 上下文复用，
+        # 显式返回错误而非抛 RuntimeError，便于上层诊断。
+        try:
+            asyncio.get_running_loop()
+            return Graphql.error_response(
+                errors=(
+                    "Subscription cannot be executed within a running event "
+                    "loop; Graphql.execute() must be called from a sync "
+                    "context."
+                ),
+                status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
+            )
+        except RuntimeError:
+            # 无运行中的 loop —— 正常路径，继续 asyncio.run
+            pass
+
+        try:
+            errors = asyncio.run(_consume_subscription())
+            if errors:
+                formatted = [Utility.format_error(e) for e in errors]
+                return Graphql.error_response(errors=formatted)
+            # Subscription completed successfully
+            return Graphql.success_response(
+                data={"subscription": "completed"}
+            )
+        except Exception as e:
+            Debugger.info(
+                variable=e,
+                stage="Graphql Debug(subscription)",
+                setting=self.setting,
             )
             return Graphql.error_response(
-                errors=str(e),
+                errors="Subscription execution error",
                 status_code=HttpStatus.INTERNAL_SERVER_ERROR.value,
             )
 
@@ -272,11 +364,6 @@ class Graphql(object):
         variables: dict[str, Any] = {},
         aws_lambda: boto3.client = None,
     ) -> dict[str, Any]:
-        # exclude = ["logger", "setting"]
-
-        # for k in exclude:
-        #     context.pop(k)
-
         result = Invoker.invoke_funct_on_aws_lambda(
             context,
             funct,
@@ -301,7 +388,7 @@ class Graphql(object):
         schema = Graphql.execute_graphql_query(
             context,
             funct,
-            query=INTROSPECTION_QUERY,
+            query=get_introspection_query(),
             aws_lambda=aws_lambda,
         )
 
@@ -319,124 +406,223 @@ class Graphql(object):
         context: dict[str, Any],
         module_name: str,
         function_name: str,
-        graphql_operation_type: str,
-        graphql_operation_name: str,
-        class_name: str | None = None,
-        variables: Optional[dict[str, Any]] = None,
+        operation_name: str,
+        operation_type: str = OperationType.QUERY.value,
         query: Optional[str] = None,
+        class_name: Optional[str] = None,
+        variables: Optional[dict[str, Any]] = None,
+        enable_preferred_custom_query: bool = True,
     ) -> dict[str, Any]:
-        try:
-            execution_context = context.copy()
-            module_name = str(module_name).strip()
-            function_name = str(function_name).strip()
-            graphql_operation_type = str(graphql_operation_type).strip()
-            graphql_operation_name = str(graphql_operation_name).strip()
+        if not all(
+            [
+                module_name,
+                function_name,
+                context,
+                operation_name,
+            ]
+        ):
+            raise ValueError("Missing required parameter(s)")
 
-            if (
-                not module_name
-                or not function_name
-                or not graphql_operation_name
-                or not graphql_operation_type
-                or not execution_context
-                or not isinstance(execution_context, dict)
-            ):
-                raise Exception("Missing required parameter(s)")
-            elif "setting" not in execution_context:
-                raise Exception("Missing `setting`, please pass it via `context`")
+        if "setting" not in context:
+            raise ValueError("Missing `setting` in context")
 
-            if query is None:
-                schema = Graphql.get_graphql_schema(
+        execution_context = context.copy()
+        query = query if isinstance(query, str) and str(query).strip() else ""
+        module_name = str(module_name).strip()
+        function_name = str(function_name).strip()
+        operation_name = str(operation_name).strip()
+        operation_type = OperationType.get(operation_type).value
+        settings = execution_context.pop("setting", {})
+        logger = execution_context.pop("logger", logging.getLogger(module_name))
+        constructor_parameters = {"logger": logger, **settings}
+        proxied_agent = Invoker.resolve_proxied_callable(
+            module_name=module_name,
+            class_name=class_name,
+            constructor_parameters=constructor_parameters,
+        )
+        call_chain = f"{operation_type} {operation_name}({module_name}.{class_name}.{function_name})"
+
+        if not query:
+            schema_picker = execution_context.get("graphql_schema_picker")
+
+            if schema_picker and callable(schema_picker):
+                query = schema_picker(
+                    operation_type=operation_type,
+                    operation_name=operation_name,
                     module_name=module_name,
-                    class_name=class_name,
+                    enable_preferred_custom_schema=enable_preferred_custom_query,
                 )
 
+        if not query:
+            Debugger.info(
+                variable=f"Introspection query `{call_chain}`",
+                stage=f"{__file__}.request_graphql.introspection",
+                setting=settings,
+                delimiter="#",
+            )
+
+            schema_cache_index = f"{module_name}_{class_name or 'default'}".lower()
+            schema = Graphql._graphql_schema_cache.get(schema_cache_index)
+
+            if not schema:
+                schema_function = getattr(proxied_agent, "build_graphql_schema", None)
+
+                if not schema_function or not callable(schema_function):
+                    raise ValueError(
+                        f"`{module_name}.{class_name}.build_graphql_schema` is not exists"
+                    )
+
+                schema_object = schema_function()
+
+                if not isinstance(schema_object, Schema):
+                    raise ValueError("Invalid schema")
+
+                result = schema_object.execute(get_introspection_query())
+
+                if result.errors:
+                    raise ValueError(f"Introspection query error: {result.errors}")
+
+                schema = result.data if result.data is not None else {}
+
+                if isinstance(schema, dict) and "__schema" in schema:
+                    schema = schema["__schema"]
+
+                with Graphql._lock:
+                    Graphql._graphql_schema_cache[schema_cache_index] = schema
+
+            query_cache_index = f"{operation_type}_{operation_name}".lower()
+            query = Graphql._graphql_query_cache.get(query_cache_index)
+
+            if not query:
                 query = Graphql.generate_graphql_operation(
-                    operation_name=graphql_operation_name,
-                    operation_type=graphql_operation_type,
+                    operation_name=operation_name,
+                    operation_type=operation_type,
                     schema=schema,
                 )
 
-            Debugger.info(
-                variable=query,
-                stage=f"{__name__}:request_query",
-                delimiter="@",
+                with Graphql._lock:
+                    Graphql._graphql_query_cache[query_cache_index] = query
+
+        proxied_function = getattr(proxied_agent, function_name, None)
+
+        if not proxied_function or not callable(proxied_function):
+            raise ValueError(
+                f"`{module_name}.{class_name}.{proxied_function}` is not exists or uncallable"
             )
 
-            result = Invoker.resolve_proxied_callable(
-                module_name=module_name,
-                function_name=function_name,
-                class_name=class_name,
-                constructor_parameters={
-                    "logger": execution_context.pop(
-                        "logger", logging.getLogger(name=module_name)
-                    ),
-                    **execution_context.pop("setting", {}),
-                },
-            )(
-                **{
-                    "query": query,
-                    "variables": variables,
-                    "context": execution_context,
-                }
-            )
+        result = proxied_function(
+            **{
+                "query": query,
+                "variables": variables,
+                "context": execution_context,
+            }
+        )
 
-            if (
-                not isinstance(result, dict)
-                or "statusCode" not in result
-                or "body" not in result
-            ):
-                raise Exception(f"Invalid response structure: {result}")
+        if (
+            not isinstance(result, dict)
+            or "statusCode" not in result
+            or "body" not in result
+        ):
+            raise ValueError(f"Invalid response structure: {result}")
 
-            status_code = str(result.get("statusCode")).strip()
-            result = result.get("body")
+        status_code = str(result.get("statusCode")).strip()
+        result_body = result.get("body")
 
-            if not result:
-                return {}
-            elif isinstance(result, str) or isinstance(result, bytes):
-                result = Serializer.json_loads(result)
+        if not result_body:
+            return {}
 
-            if status_code.startswith("20"):
-                if graphql_operation_name in result.get("data", {}):
-                    return result.get("data").get(graphql_operation_name)
-                return {}
-            elif "errors" in result:
-                raise Exception(f"Request graphql error: {result.get('errors')}")
-            else:
-                raise Exception(f"Request graphql error with status: {status_code}")
+        if isinstance(result_body, (str, bytes)):
+            result_body = Serializer.json_loads(result_body)
 
-        except Exception as e:
-            Debugger.info(
-                variable=e,
-                stage="Graphql Debug(request_graphql)",
-                delimiter="#",
-            )
-            raise e
+        if status_code.startswith("20"):
+            return result_body.get("data", {}).get(operation_name, {})
+        elif "errors" in result_body:
+            raise ValueError(f"Request graphql error: {result_body.get('errors')}")
+        else:
+            raise ValueError(f"Request graphql error with status: {status_code}")
 
     @staticmethod
     def get_graphql_schema(
         module_name: str,
         class_name: str | None = None,
     ) -> dict[str, Any]:
-        try:
-            schema_object = Invoker.resolve_proxied_callable(
-                module_name=module_name,
-                class_name=class_name,
-                function_name="build_graphql_schema",
-            )()
+        cache_index = f"{module_name}_{str(class_name).strip() or 'default'}".lower()
+        schema = Graphql._graphql_schema_cache.get(cache_index)
 
-            result = schema_object.execute(INTROSPECTION_QUERY)
-
-            if result.errors:
-                raise Exception(f"Introspection query error: {result.errors}")
-
-            schema = result.data if result.data is not None else {}
-
-            if isinstance(schema, dict) and "__schema" in schema:
-                return schema.get("__schema", {})
-
+        if schema:
             return schema
-        except Exception as e:
-            raise e
+
+        result = Graphql._get_graphql_schema(
+            module_name=module_name,
+            class_name=class_name,
+        )
+
+        if not result:
+            raise ValueError("Invalid schema introspection")
+        elif result.errors:
+            raise ValueError(f"Introspection query error: {result.errors}")
+
+        schema = result.data if result.data is not None else {}
+
+        if isinstance(schema, dict) and "__schema" in schema:
+            schema = schema["__schema"]
+
+        with Graphql._lock:
+            Graphql._graphql_schema_cache[cache_index] = schema
+
+        return schema
+
+    @staticmethod
+    def get_schema_root_fields(
+        module_name: str,
+        class_name: Optional[str] = None,
+        types: Optional[List[str]] = None,
+    ) -> Dict[str, List[Dict]]:
+        result = Graphql._get_graphql_schema(
+            module_name=module_name,
+            class_name=class_name,
+        )
+
+        if result.errors:
+            raise ValueError(f"Failed to query introspection: {result.errors}")
+        elif not hasattr(result, "data"):
+            raise ValueError("Invalid introspection result")
+
+        client_schema = build_client_schema(introspection=result.data)
+
+        if not types or len(types) < 1:
+            types = ["Query", "Mutation", "Subscription"]
+
+        fields: Dict[str, List[Dict]] = {t: [] for t in types}
+
+        for operation in types:
+            meta = getattr(client_schema, f"{operation.lower()}_type", None)
+
+            if not meta:
+                continue
+
+            for field in getattr(meta, "fields", []):
+                fields[operation].append(field)
+
+        return fields
+
+    @staticmethod
+    def _get_graphql_schema(
+        module_name: str,
+        class_name: Optional[str] = None,
+    ) -> ExecutionResult:
+        module_name = module_name.strip()
+
+        if not module_name:
+            raise ValueError("Missing required parameter(s)")
+
+        schema_scanner = Invoker.resolve_proxied_callable(
+            module_name=module_name,
+            class_name=class_name,
+            function_name="build_graphql_schema",
+        )()
+
+        return schema_scanner.execute(get_introspection_query())
 
     @staticmethod
     def extract_available_fields(
@@ -445,15 +631,35 @@ class Graphql(object):
         for type_def in schema["types"]:
             if type_def["name"] == type_name and type_def["kind"] == "OBJECT":
                 return [
-                    {
-                        "name": field["name"],
-                        "type": field["type"]["name"]
-                        or (field["type"].get("ofType") or {}).get("name"),
-                        "kind": field["type"]["kind"],
-                    }
+                    Graphql.get_real_field_data(field)
                     for field in type_def.get("fields", [])
                 ]
         raise Exception(f"Type '{type_name}' not found in schema.")
+
+    @staticmethod
+    def get_real_field_data(field: dict[str, Any]) -> dict[str, Any]:
+        if field["name"] == "edges":
+            return {
+                "name": field["name"],
+                "type": (field["type"].get("ofType") or {})
+                .get("ofType", {})
+                .get("name"),
+                "kind": (field["type"].get("ofType") or {})
+                .get("ofType", {})
+                .get("kind"),
+            }
+        if field["name"] == "pageInfo":
+            return {
+                "name": field["name"],
+                "type": (field["type"].get("ofType") or {}).get("name"),
+                "kind": (field["type"].get("ofType") or {}).get("kind"),
+            }
+        return {
+            "name": field["name"],
+            "type": field["type"]["name"]
+            or (field["type"].get("ofType") or {}).get("name"),
+            "kind": field["type"]["kind"],
+        }
 
     @staticmethod
     def generate_field_subselection(schema: dict[str, Any], type_name: str) -> str:
@@ -470,6 +676,7 @@ class Graphql(object):
                         "JSON",
                         "JSONCamelCase",
                         "JSONSnakeCase",
+                        "SafeFloat",
                     ]:
                         # Recursively generate subselection for nested objects
                         nested_fields = Graphql.generate_field_subselection(
@@ -524,8 +731,20 @@ class Graphql(object):
 
     @staticmethod
     def generate_graphql_operation(
-        operation_name: str, operation_type: str, schema: dict[str, Any]
+        operation_name: str,
+        operation_type: str,
+        schema: dict[str, Any],
     ) -> str:
+        if not all([operation_name, operation_type]):
+            raise ValueError("Invalid arguments")
+
+        operation_name = operation_name.strip()
+        operation_type = operation_type.strip()
+        cache_index = f"{operation_type.lower()}_{operation_name.lower()}"
+        query = Graphql._graphql_query_cache.get(cache_index)
+        if query:
+            return query
+
         def format_type(field_type: dict[str, Any]) -> str:
             """Format the GraphQL type."""
             if field_type["kind"] == "NON_NULL":
@@ -559,7 +778,7 @@ class Graphql(object):
         argument_usage = ", ".join(f"{arg['name']}: ${arg['name']}" for arg in args)
         return_type = operation_details["type"]
 
-        if return_type["kind"] == "NON_NULL":
+        if return_type["kind"] == "NON_NULL" or return_type["kind"] == "LIST":
             return_type = return_type["ofType"]
 
         field_string = (
@@ -568,23 +787,22 @@ class Graphql(object):
             else ""
         )
 
-        if not variable_definitions and not argument_usage and not field_string:
-            return f"""{operation_type.lower()} {operation_name} {{{operation_name}}}"""
+        with Graphql._lock:
+            if not variable_definitions and not argument_usage and not field_string:
+                Graphql._graphql_query_cache[cache_index] = (
+                    f"""{operation_type.lower()} {operation_name} {{{operation_name}}}"""
+                )
+                return Graphql._graphql_query_cache.get(cache_index)
 
-        return f"""
-        {operation_type.lower()} {operation_name}({variable_definitions}) {{
-            {operation_name}({argument_usage}) {{
-                {field_string}
+            Graphql._graphql_query_cache[cache_index] = f"""
+            {operation_type.lower()} {operation_name}({variable_definitions}) {{
+                {operation_name}({argument_usage}) {{
+                    {field_string}
+                }}
             }}
-        }}
-        """
+            """
 
-
-class KeyStyle(Enum):
-    """Enumeration for JSON key naming styles."""
-
-    CAMEL = 0
-    SNAKE = 1
+            return Graphql._graphql_query_cache.get(cache_index)
 
 
 class JSON(graphene.Scalar):
@@ -601,10 +819,10 @@ class JSON(graphene.Scalar):
     - Type safety with proper validation
 
     Attributes:
-        _key_style: Current key style (KeyStyle.CAMEL or KeyStyle.SNAKE)
+        _key_style: Current key style (NamingConvention.CAMEL or NamingConvention.SNAKE)
     """
 
-    _key_style: KeyStyle = KeyStyle.CAMEL
+    _key_style: NamingConvention = NamingConvention.CAMEL
 
     @classmethod
     def camel_case(cls) -> "JSON":
@@ -614,7 +832,7 @@ class JSON(graphene.Scalar):
             JSON scalar instance configured for camelCase output
         """
         instance = cls()
-        instance._key_style = KeyStyle.CAMEL
+        instance._key_style = NamingConvention.CAMEL
         return instance
 
     @classmethod
@@ -625,19 +843,19 @@ class JSON(graphene.Scalar):
             JSON scalar instance configured for snake_case output
         """
         instance = cls()
-        instance._key_style = KeyStyle.SNAKE
+        instance._key_style = NamingConvention.SNAKE
         return instance
 
     @staticmethod
     def transform_dict_keys(
         data: Any,
-        key_style: KeyStyle = KeyStyle.CAMEL,
+        key_style: NamingConvention = NamingConvention.CAMEL,
     ) -> Any:
         """Recursively convert all keys in JSON data to specified naming style.
 
         Args:
             data: Input data (dict, list, or primitive type)
-            key_style: Target naming style - KeyStyle.CAMEL or KeyStyle.SNAKE
+            key_style: Target naming style - NamingConvention.CAMEL or NamingConvention.SNAKE
 
         Returns:
             Data with all keys converted to specified style
@@ -650,7 +868,7 @@ class JSON(graphene.Scalar):
             result = {}
             convert_func = (
                 Utility.to_camel_case
-                if key_style == KeyStyle.CAMEL
+                if key_style == NamingConvention.CAMEL
                 else Utility.to_snake_case
             )
             for k, v in data.items():
@@ -674,16 +892,31 @@ class JSON(graphene.Scalar):
             return value.__class__(value)
         elif isinstance(value, (list, dict)):
             return value
+        elif isinstance(value, Decimal):
+            return float(value)
         else:
             return None
 
-    def _get_reversed_key_style(self) -> KeyStyle:
-        if self._key_style == KeyStyle.CAMEL:
-            return KeyStyle.SNAKE
-        return KeyStyle.CAMEL
+    def _get_reversed_key_style(self) -> NamingConvention:
+        if self._key_style == NamingConvention.CAMEL:
+            return NamingConvention.SNAKE
+        return NamingConvention.CAMEL
 
-    def serialize(self, value: Any) -> Any:
+    @staticmethod
+    def serialize(value: Any) -> Any:
         """Serialize value to JSON with key style conversion.
+
+        graphene's Scalar coercion contract calls ``serialize`` /
+        ``parse_value`` as static methods (without an instance), so these
+        MUST be ``@staticmethod`` — defining them as instance methods makes
+        ``self`` swallow the ``value`` argument, producing
+        ``JSON.serialize() missing 1 required positional argument: 'value'``
+        and silently dropping every JSON-typed mutation variable (e.g. the
+        A2A task ``inputData`` / ``outputData`` fields), so tasks are never
+        persisted and ``tasks/get`` returns "Task not found".
+
+        The key style is read from the ``_key_style`` class attribute so
+        subclasses (JSONCamelCase / JSONSnakeCase) get the right transform.
 
         Args:
             value: Input value to serialize
@@ -692,10 +925,13 @@ class JSON(graphene.Scalar):
             JSON value with keys converted to configured style
         """
         raw_value = JSON.identity(value)
-        return self.transform_dict_keys(raw_value, self._key_style)
+        return JSON.transform_dict_keys(raw_value, JSON._key_style)
 
-    def parse_value(self, value: Any) -> Any:
+    @staticmethod
+    def parse_value(value: Any) -> Any:
         """Parse value from JSON with reverse key style conversion.
+
+        Must be ``@staticmethod`` — see ``serialize`` above.
 
         Args:
             value: Input value to parse
@@ -704,7 +940,12 @@ class JSON(graphene.Scalar):
             Parsed value with keys converted from configured style
         """
         raw_value = JSON.identity(value)
-        return self.transform_dict_keys(raw_value, self._get_reversed_key_style())
+        reversed_style = (
+            NamingConvention.SNAKE
+            if JSON._key_style == NamingConvention.CAMEL
+            else NamingConvention.CAMEL
+        )
+        return JSON.transform_dict_keys(raw_value, reversed_style)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
@@ -738,7 +979,7 @@ class JSON(graphene.Scalar):
 class JSONCamelCase(JSON):
     """JSON scalar with `camelCase` key style."""
 
-    _key_style: KeyStyle = KeyStyle.CAMEL
+    _key_style: NamingConvention = NamingConvention.CAMEL
 
     @staticmethod
     def identity(value: Any) -> Any:
@@ -747,12 +988,12 @@ class JSONCamelCase(JSON):
     @staticmethod
     def serialize(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.CAMEL)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.CAMEL)
 
     @staticmethod
     def parse_value(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.SNAKE)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.SNAKE)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
@@ -762,7 +1003,7 @@ class JSONCamelCase(JSON):
 class JSONSnakeCase(JSON):
     """JSON scalar with `snake_case` key style."""
 
-    _key_style: KeyStyle = KeyStyle.SNAKE
+    _key_style: NamingConvention = NamingConvention.SNAKE
 
     @staticmethod
     def identity(value: Any) -> Any:
@@ -771,13 +1012,41 @@ class JSONSnakeCase(JSON):
     @staticmethod
     def serialize(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.SNAKE)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.SNAKE)
 
     @staticmethod
     def parse_value(value: Any) -> Any:
         raw_value = JSON.identity(value)
-        return JSON.transform_dict_keys(raw_value, KeyStyle.CAMEL)
+        return JSON.transform_dict_keys(raw_value, NamingConvention.CAMEL)
 
     @staticmethod
     def parse_literal(node: ast.Node) -> Any:
         return JSON.parse_literal(node)
+
+
+class SafeFloat(graphene.Scalar):
+    """Custom Float Scalar with automatic conversion from Decimal to float"""
+
+    @staticmethod
+    def serialize(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        elif isinstance(value, (int, float)):
+            return float(value)
+        raise ValueError(f"Invalid Float value: {value}")
+
+    @staticmethod
+    def parse_literal(node):
+        if isinstance(node, ast.FloatValue):
+            return float(node.value)
+        if isinstance(node, ast.IntValue):
+            return float(node.value)
+        raise ValueError(f"Invalid Float literal: {node}")
+
+    @staticmethod
+    def parse_value(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        elif isinstance(value, (int, float)):
+            return float(value)
+        raise ValueError(f"Invalid Float value: {value}")

@@ -32,7 +32,8 @@ dependencies = [
     "python-dateutil>=2.8.0",
     "sqlalchemy>=1.4.0",
     "graphql-core",
-    "graphene"
+    "graphene",
+    "orjson"
 ]
 
 [project.optional-dependencies]
