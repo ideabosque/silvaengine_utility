@@ -164,8 +164,11 @@ class Graphql(object):
             # default (parse_float=Decimal).  graphql-core's GraphQLFloat
             # and GraphQLInt scalars only accept native int/float, so
             # Decimal values in variables cause validation errors.
-            # Convert Decimal back to float before passing to graphene.
-            variable_values = _coerce_variable_values(params.get("variables", {}))
+            # Preserve dev's shared conversion for both normal operations
+            # and subscriptions (including exact integral Decimal values).
+            variable_values = Serializer.json_handler.convert_decimal_to_number(
+                params.get("variables", {})
+            )
 
             # Subscription operations require a different execution path
             # (schema.subscribe instead of schema.execute_async) and push

@@ -18,6 +18,23 @@ import boto3
 
 from .serializer import Serializer
 
+#: In-process WebSocket connection manager registered by a self-hosted
+#: gateway (silvaengine_gateway ``ConnectionManager``). When it holds the
+#: target connection, events are delivered locally; otherwise the AWS API
+#: Gateway ``post_to_connection`` path is used (Lambda deployments).
+_LOCAL_CONNECTION_MANAGER: Optional[Any] = None
+
+
+def set_local_connection_manager(manager: Optional[Any]) -> None:
+    """Register (or clear with ``None``) the gateway's connection manager.
+
+    The manager must expose ``send_to_connection(connection_id, data) ->
+    bool`` (thread-safe, returns ``False`` when it does not own the
+    connection).
+    """
+    global _LOCAL_CONNECTION_MANAGER
+    _LOCAL_CONNECTION_MANAGER = manager
+
 
 class WebSocketStreamer:
     """WebSocket 事件推送器。
@@ -92,7 +109,11 @@ class WebSocketStreamer:
         """
         import asyncio
 
-        data = Serializer.json_dumps(payload).encode("utf-8")
+        text = Serializer.json_dumps(payload)
+        manager = _LOCAL_CONNECTION_MANAGER
+        if manager is not None and manager.send_to_connection(self.connection_id, text):
+            return
+        data = text.encode("utf-8")
         try:
             await asyncio.to_thread(
                 self.client.post_to_connection,
