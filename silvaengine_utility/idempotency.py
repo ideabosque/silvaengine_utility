@@ -33,6 +33,7 @@ import logging
 from typing import Any, Callable, Dict, Optional
 
 import pendulum
+from .idempotency_codec import decode_result, encode_result
 from silvaengine_connections import ConnectionPoolManager
 from sqlalchemy import text
 
@@ -99,7 +100,7 @@ class IdempotencyRepository:
         return {
             "idempotency_key": str(row.get("idempotency_key")),
             "mutation_name": row.get("mutation_name"),
-            "result": result_payload,
+            "result": decode_result(result_payload),
         }
 
     @staticmethod
@@ -117,7 +118,7 @@ class IdempotencyRepository:
         """
         now = pendulum.now("UTC")
         payload_str = (
-            json.dumps(result, ensure_ascii=False, default=str)
+            json.dumps(encode_result(result), ensure_ascii=False, default=str)
             if result is not None
             else None
         )
